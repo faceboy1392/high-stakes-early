@@ -1,9 +1,9 @@
-bin/main.cpp.o: src/main.cpp include/main.h include/api.h \
- include/pros/adi.h include/pros/colors.h include/pros/device.h \
- include/pros/distance.h include/pros/error.h include/pros/ext_adi.h \
- include/pros/adi.h include/pros/adi.h include/pros/gps.h \
- include/pros/imu.h include/pros/link.h include/pros/llemu.h \
- include/liblvgl/llemu.h include/liblvgl/lvgl.h \
+bin/ControllerUI.cpp.o: src/ControllerUI.cpp include/devices.h \
+ include/main.h include/api.h include/pros/adi.h include/pros/colors.h \
+ include/pros/device.h include/pros/distance.h include/pros/error.h \
+ include/pros/ext_adi.h include/pros/adi.h include/pros/adi.h \
+ include/pros/gps.h include/pros/imu.h include/pros/link.h \
+ include/pros/llemu.h include/liblvgl/llemu.h include/liblvgl/lvgl.h \
  include/liblvgl/misc/lv_log.h include/liblvgl/lv_conf_internal.h \
  include/liblvgl/lv_conf_kconfig.h include/liblvgl/lv_conf.h \
  include/liblvgl/misc/lv_types.h include/liblvgl/misc/lv_timer.h \
@@ -129,8 +129,7 @@ bin/main.cpp.o: src/main.cpp include/main.h include/api.h \
  include/pros/motors.hpp include/pros/optical.hpp include/pros/optical.h \
  include/pros/rotation.hpp include/pros/rotation.h include/pros/rtos.hpp \
  include/pros/screen.hpp include/pros/screen.h include/pros/vision.hpp \
- include/pros/vision.h include/ControllerUI.h include/main.h \
- include/devices.h include/lemlib/api.hpp include/lemlib/pid.hpp \
+ include/pros/vision.h include/lemlib/api.hpp include/lemlib/pid.hpp \
  include/lemlib/pose.hpp include/lemlib/util.hpp \
  include/lemlib/chassis/chassis.hpp include/pros/imu.hpp \
  include/lemlib/asset.hpp include/lemlib/chassis/trackingWheel.hpp \
@@ -141,8 +140,8 @@ bin/main.cpp.o: src/main.cpp include/main.h include/api.h \
  include/fmt/format-inl.h include/lemlib/logger/baseSink.hpp \
  include/fmt/args.h include/lemlib/logger/message.hpp \
  include/lemlib/logger/infoSink.hpp \
- include/lemlib/logger/telemetrySink.hpp include/devices.h \
- include/pros/screen.hpp
+ include/lemlib/logger/telemetrySink.hpp include/main.h
+include/devices.h:
 include/main.h:
 include/api.h:
 include/pros/adi.h:
@@ -357,9 +356,6 @@ include/pros/screen.hpp:
 include/pros/screen.h:
 include/pros/vision.hpp:
 include/pros/vision.h:
-include/ControllerUI.h:
-include/main.h:
-include/devices.h:
 include/lemlib/api.hpp:
 include/lemlib/pid.hpp:
 include/lemlib/pose.hpp:
@@ -383,5 +379,4 @@ include/fmt/args.h:
 include/lemlib/logger/message.hpp:
 include/lemlib/logger/infoSink.hpp:
 include/lemlib/logger/telemetrySink.hpp:
-include/devices.h:
-include/pros/screen.hpp:
+include/main.h:
