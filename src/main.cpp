@@ -1,5 +1,6 @@
 #include "main.h"
-// #include "pros/apix.h"
+#include "liblvgl/core/lv_obj.h"
+#include "pros/apix.h"
 
 #include <algorithm>
 #include <math.h>
@@ -7,6 +8,7 @@
 
 #include "ControllerUI.h"
 #include "devices.h"
+#include "pros/screen.h"
 #include "pros/screen.hpp"
 
 using namespace std;
@@ -16,16 +18,13 @@ typedef struct {
   double g; // a fraction between 0 and 1
   double b; // a fraction between 0 and 1
 } rgb;
-
 typedef struct {
   double h; // angle in degrees
   double s; // a fraction between 0 and 1
   double v; // a fraction between 0 and 1
 } hsv;
-
 static hsv rgb2hsv(rgb in);
 static rgb hsv2rgb(hsv in);
-
 hsv rgb2hsv(rgb in) {
   hsv out;
   double min, max, delta;
@@ -66,7 +65,6 @@ hsv rgb2hsv(rgb in) {
 
   return out;
 }
-
 rgb hsv2rgb(hsv in) {
   double hh, p, q, t, ff;
   long i;
@@ -150,6 +148,11 @@ string getCompStatusString() {
   }
 }
 
+// AUTON STUFF
+enum AutonRoutine { RED_LEFT, RED_RIGHT, BLUE_LEFT, BLUE_RIGHT, SKILLS, NONE };
+
+AutonRoutine chosen_auton = NONE;
+
 void controller_screen() {
   // controller has a stupid polling rate of once every 50ms so have to use
   // delays a lot
@@ -165,9 +168,8 @@ void controller_screen() {
   }
 }
 
-unsigned long createRGB(int r, int g, int b)
-{   
-    return ((r & 0xff) << 16) + ((g & 0xff) << 8) + (b & 0xff);
+unsigned long createRGB(int r, int g, int b) {
+  return ((r & 0xff) << 16) + ((g & 0xff) << 8) + (b & 0xff);
 }
 unsigned long createRGBA(int r, int g, int b, int a) {
   return ((r & 0xff) << 24) + ((g & 0xff) << 16) + ((b & 0xff) << 8) +
@@ -175,6 +177,119 @@ unsigned long createRGBA(int r, int g, int b, int a) {
 }
 
 void brain_screen() {
+  LV_IMG_DECLARE(match_field);
+
+  lv_obj_t *img = lv_img_create(lv_scr_act());
+  lv_img_set_src(img, &match_field);
+  lv_obj_set_pos(img, 120, 0);
+  lv_obj_set_size(img, 240, 240);
+
+  lv_obj_t *red_rect = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(red_rect, 120, 180);
+  lv_obj_set_pos(red_rect, 0, 0);
+  lv_obj_set_style_radius(red_rect, 0, 0);
+  lv_obj_set_style_pad_all(red_rect, 0, 0);
+  lv_obj_set_style_bg_color(red_rect, lv_color_make(235, 25, 25), 0);
+
+  lv_obj_t *blue_rect = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(blue_rect, 120, 180);
+  lv_obj_set_pos(blue_rect, 360, 0);
+  lv_obj_set_style_radius(blue_rect, 0, 0);
+  lv_obj_set_style_pad_all(blue_rect, 0, 0);
+  lv_obj_set_style_bg_color(blue_rect, lv_color_make(25, 160, 228), 0);
+
+  // skills
+  lv_obj_t *skills_rect = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(skills_rect, 120, 60);
+  lv_obj_set_pos(skills_rect, 360, 180);
+  lv_obj_set_style_radius(skills_rect, 0, 0);
+  lv_obj_set_style_pad_all(skills_rect, 0, 0);
+  lv_obj_set_style_bg_color(skills_rect, lv_color_make(255, 255, 255), 0);
+
+  lv_obj_t *skills_label = lv_label_create(skills_rect);
+  lv_label_set_text(skills_label, "SKILLS");
+  lv_obj_align(skills_label, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_text_color(skills_label, lv_color_make(0, 0, 0), 0);
+
+  // black box white text for "NONE"
+  lv_obj_t *none_rect = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(none_rect, 120, 60);
+  lv_obj_set_pos(none_rect, 0, 180);
+  lv_obj_set_style_radius(none_rect, 0, 0);
+
+  lv_obj_t *none_label = lv_label_create(none_rect);
+  lv_label_set_text(none_label, "NONE");
+  lv_obj_align(none_label, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_text_color(none_label, lv_color_make(255, 255, 255), 0);
+
+  // lines
+  lv_obj_t *line1 = lv_line_create(lv_scr_act());
+  static lv_point_t line1_points[] = {{0, 120}, {120, 120}};
+  lv_line_set_points(line1, line1_points, 2);
+  lv_obj_set_style_line_color(line1, lv_color_make(0, 0, 0), 0);
+  lv_obj_set_style_line_width(line1, 2, 0);
+
+  lv_obj_t *line2 = lv_line_create(lv_scr_act());
+  static lv_point_t line2_points[] = {{360, 120}, {480, 120}};
+  lv_line_set_points(line2, line2_points, 2);
+  lv_obj_set_style_line_color(line2, lv_color_make(0, 0, 0), 0);
+  lv_obj_set_style_line_width(line2, 2, 0);
+
+  // wait for click
+  while (screen::touch_status().touch_status != E_TOUCH_HELD) {
+    delay(20);
+  }
+
+  // top left is red left, bottom left is red right (their perspective facing
+  // the field) top right is blue right, bottom right is blue left
+
+  if (screen::touch_status().x < 240) {
+    if (screen::touch_status().y < 120) {
+      chosen_auton = RED_LEFT;
+    } else {
+      if (screen::touch_status().y < 180 || screen::touch_status().x > 120) {
+        chosen_auton = RED_RIGHT;
+      } else {
+        chosen_auton = NONE;
+      }
+    }
+  } else {
+    if (screen::touch_status().y < 120) {
+      chosen_auton = BLUE_RIGHT;
+    } else {
+      if (screen::touch_status().y < 180 || screen::touch_status().x < 360) {
+        chosen_auton = BLUE_LEFT;
+      } else {
+        chosen_auton = SKILLS;
+      }
+    }
+  }
+
+  // clear screen and display the chosen auton
+  screen::erase();
+  // switch statement for chosen_auton
+  switch (chosen_auton) {
+  case RED_LEFT:
+    screen::print(E_TEXT_LARGE_CENTER, 0, "RED LEFT");
+    break;
+  case RED_RIGHT:
+    screen::print(E_TEXT_LARGE_CENTER, 0, "RED RIGHT");
+    break;
+  case BLUE_LEFT:
+    screen::print(E_TEXT_LARGE_CENTER, 0, "BLUE LEFT");
+    break;
+  case BLUE_RIGHT:
+    screen::print(E_TEXT_LARGE_CENTER, 0, "BLUE RIGHT");
+    break;
+  case SKILLS:
+    screen::print(E_TEXT_LARGE_CENTER, 0, "SKILLS");
+    break;
+  case NONE:
+    screen::print(E_TEXT_LARGE_CENTER, 0, "NO AUTONOMOUS ROUTINE");
+    break;
+  }
+
+  /*
   screen::erase();
   double hue = 0;
   while (true) {
@@ -190,49 +305,257 @@ void brain_screen() {
     screen::fill_rect(0, 0, 480, 240);
     // screen::set_pen(0xFF0000);
   }
+  */
 }
 
 void initialize() {
+  left_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
+  right_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
+
   master.clear();
   delay(50);
   master.print(0, 0, "Calibrating...");
   partner.print(0, 0, "Calibrating...");
 
-  // stdout
-  FILE *out = fopen("sout", "w");
-
   // calibration
   chassis.calibrate();
-  fputs("Calibrated chassis", out);
-
-  // settings file
-  fputs("Opening settings.txt...", out);
-  FILE *fp = fopen("/settings.txt", "r");
-  if (fp == NULL) {
-    fputs("settings.txt not found, creating...", out);
-    fp = fopen("/settings.txt", "w");
-    fprintf(fp, "");
-    fclose(fp);
-  } else
-    fputs("settings.txt found", out);
 
   // controller task
   Task controller_task(controller_screen);
-  fputs("Started controller screen task", out);
 
   // brain screen task
   Task brain_task(brain_screen);
-  fputs("Started brain screen task", out);
 }
 
 void disabled() {}
 
 void competition_initialize() {}
 
-void autonomous() {}
+void autonRedLeft() {  
+  rollers.set_value(true);
+  chassis.setPose({31, 9, 0}, false);
+
+  chassis.moveToPoint(48, 48, 1000);
+  // chassis.waitUntil(36);
+  chassis.waitUntilDone();
+  intake.move_velocity(200);
+  delay(300);
+  // delay(350);
+
+  // move to first goal
+  chassis.turnToPoint(0, 48, 500, {.forwards = false}, true);
+  delay(100);
+  intake.brake();
+  chassis.waitUntilDone();
+  chassis.moveToPoint(24, 48 + 2, 1000, {.forwards = false, .maxSpeed = 50});
+  chassis.waitUntilDone();
+  delay(150);
+  lever.set_value(true);
+  intake.move_velocity(200);
+  delay(600);
+  intake.move_velocity(-100);
+  delay(300);
+  chassis.turnToPoint(0, 0, 1000);
+  chassis.waitUntilDone();
+
+  intake.move_velocity(200);
+  chassis.moveToPoint(0, 33, 1500);
+  chassis.waitUntilDone();
+
+  intake.move_velocity(200);
+  // intake.brake();
+  chassis.moveToPoint(-32, 32, 1000);
+  chassis.waitUntilDone();
+
+  lever.set_value(false);
+  intake.move_velocity(200);
+  chassis.turnToPoint(-48, 48, 1000);
+  chassis.moveToPoint(-48, 48, 1000, {}, true);
+  // chassis.moveToPose(-48, 48, 315, 1500);
+  delay(900);
+  intake.brake();
+  chassis.turnToPoint(-24, 48, 1000, {.forwards = false});
+  delay(100);
+  chassis.moveToPoint(-18, 48, 1000, {.forwards = false, .maxSpeed = 50});
+  chassis.waitUntilDone();
+  lever.set_value(true);
+  intake.move_velocity(200);
+  delay(500);
+  chassis.turnToPoint(0, 48, 1000);
+
+  chassis.waitUntilDone();
+  delay(300);
+
+  left_motors.set_brake_mode(MOTOR_BRAKE_COAST);
+  right_motors.set_brake_mode(MOTOR_BRAKE_COAST);
+
+  intake.move(40);
+  chassis.moveToPoint(-6, 52, 800);
+  chassis.waitUntilDone();
+
+  lever.set_value(false);
+
+  delay(3000);
+  intake.brake();
+
+  
+
+  /*
+  delay(1000);
+  // move between ladder and alliance wall stake
+  chassis.waitUntil(12);
+  intake.move_velocity(-200);
+  chassis.waitUntilDone();
+  delay(200);
+  intake.move_velocity(200);
+  // move towards second goal
+  chassis.moveToPoint(-48, 48, 2000);
+  chassis.waitUntil(12);
+  lever.set_value(false);
+  intake.brake();
+  chassis.waitUntil(45);
+  intake.move_velocity(50);
+  chassis.waitUntilDone();
+  delay(200);
+  intake.brake();
+  // turn to second goal
+  chassis.turnToPoint(0, 48, 1000, {.forwards = false});
+  chassis.moveToPoint(-26, 48, 1000, {.forwards = false});
+  chassis.waitUntilDone();
+  lever.set_value(true);
+  intake.move_velocity(200);
+  delay(1000);
+  intake.move_velocity(-200);
+  delay(300);
+  intake.move_velocity(200);
+  delay(500);
+  intake.brake();
+
+  */
+}
+
+void autonRedRight() {
+  rollers.set_value(true);
+  chassis.setPose({31, 9, 0}, false);
+
+  chassis.moveToPoint(48, 48, 1000);
+  // chassis.waitUntil(36);
+  chassis.waitUntilDone();
+  intake.move_velocity(200);
+  delay(300);
+  // delay(350);
+
+  // move to first goal
+  chassis.turnToPoint(0, 48, 500, {.forwards = false}, true);
+  delay(100);
+  intake.brake();
+  chassis.waitUntilDone();
+  chassis.moveToPoint(24, 48 + 2, 1000, {.forwards = false, .maxSpeed = 50});
+  chassis.waitUntilDone();
+  delay(150);
+  lever.set_value(true);
+  intake.move_velocity(200);
+  delay(600);
+  intake.move_velocity(-100);
+  chassis.turnToPoint(0, 0, 1000, {}, true);
+  delay(400);
+
+  intake.move_velocity(200);
+  chassis.waitUntilDone();
+
+  chassis.moveToPoint(19, 43, 1000);
+
+  chassis.waitUntilDone();
+
+  delay(3000);
+  intake.brake();
+
+  rollers.set_value(false);
+
+  left_motors.set_brake_mode(MOTOR_BRAKE_HOLD);
+  right_motors.set_brake_mode(MOTOR_BRAKE_HOLD);
+
+  chassis.moveToPoint(11, 35, 1000, { .maxSpeed = 60});
+
+  chassis.waitUntilDone();
+
+  rollers.set_value(true);
+
+  // jolt to push intake down
+  intake.move_velocity(200);
+
+  delay(1800);
+
+  left_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
+  right_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
+
+  chassis.moveToPoint(20, 44, 1000, {.forwards = false, .maxSpeed = 60});
+  chassis.waitUntilDone();
+  intake.move_velocity(200);
+
+  delay(1500);
+  intake.move_velocity(-200);
+
+  delay(400);
+  intake.move_velocity(200);
+  
+  delay(1000);
+  intake.brake();
+
+  lever.set_value(false);
+  
+}
+
+void autonBlueLeft() {
+  autonRedLeft();
+}
+
+void autonBlueRight() {
+  autonRedRight();
+}
+
+void autonSkills() {
+  chassis.setPose({31, 9, 180}, false);
+  chassis.moveToPoint(31, 40, 1500);
+}
+
+void autonomous() {
+  // chassis.calibrate();
+  left_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
+  right_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
+  switch (chosen_auton) {
+  case RED_LEFT:
+    autonRedLeft();
+    break;
+  case RED_RIGHT:
+    autonRedRight();
+    break;
+  case BLUE_LEFT:
+    autonBlueLeft();
+    break;
+  case BLUE_RIGHT:
+    autonBlueRight();
+    break;
+  case SKILLS:
+    autonSkills();
+    break;
+  case NONE:
+    // autonRedRight();
+    autonRedLeft();
+    break;
+  }
+}
 
 void opcontrol() {
+  left_motors.set_brake_mode(MOTOR_BRAKE_COAST);
+  right_motors.set_brake_mode(MOTOR_BRAKE_COAST);
+
   int turning_speed = 50;
+
+  // bool lever_state = false;
+  // bool hook_state = false;
+
+  rollers.set_value(true);
 
   while (true) {
     delay(20);
@@ -241,10 +564,46 @@ void opcontrol() {
       continue; // DISABLE THE DRIVE LOOP SO I DONT ACCIDENTALLY DRIVE IT OFF
                 // THE TABLE
 
-    if (master.get_digital_new_press(E_CONTROLLER_DIGITAL_UP))
-      turning_speed += turning_speed >= 100 ? 0 : 10;
-    if (master.get_digital_new_press(E_CONTROLLER_DIGITAL_DOWN))
-      turning_speed -= turning_speed <= 0 ? 0 : 10;
+    // if (master.get_digital_new_press(E_CONTROLLER_DIGITAL_UP))
+    //   turning_speed += turning_speed >= 100 ? 0 : 10;
+    // if (master.get_digital_new_press(E_CONTROLLER_DIGITAL_DOWN))
+    //   turning_speed -= turning_speed <= 0 ? 0 : 10;
+
+    // if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L1)) {
+    //   lever_state = !lever_state;
+    //   lever.set_value(lever_state);
+    // }
+    // if (master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L2)) {
+    //   hook_state = !hook_state;
+    //   hook.set_value(hook_state);
+    // }
+
+    // clamp
+    if (master.get_digital(E_CONTROLLER_DIGITAL_L1))
+      lever.set_value(true);
+    else if (master.get_digital(E_CONTROLLER_DIGITAL_L2))
+      lever.set_value(false);
+
+    // arm
+    if (master.get_digital(E_CONTROLLER_DIGITAL_UP))
+      hook.set_value(false);
+    else if (master.get_digital(E_CONTROLLER_DIGITAL_DOWN))
+      hook.set_value(true);
+
+    // intake roller
+    if (master.get_digital(E_CONTROLLER_DIGITAL_X))
+      rollers.set_value(false);
+    else if (master.get_digital(E_CONTROLLER_DIGITAL_B))
+      rollers.set_value(true);
+
+    if (master.get_digital(E_CONTROLLER_DIGITAL_R1))
+      intake.move(127);
+    else if (master.get_digital(E_CONTROLLER_DIGITAL_R2))
+      intake.move(-127);
+    else
+      intake.move(0);
+
+    
 
     double forward = master.get_analog(E_CONTROLLER_ANALOG_LEFT_Y),
            turn = master.get_analog(E_CONTROLLER_ANALOG_RIGHT_X) *

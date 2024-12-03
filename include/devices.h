@@ -14,7 +14,13 @@ extern Motor motor_l1,
 extern MotorGroup left_motors,
     right_motors;
 
+extern MotorGroup intake;
+
 extern Imu imu;
+
+extern adi::DigitalOut rollers;
+extern adi::DigitalOut lever;
+extern adi::DigitalOut hook;
 
 extern lemlib::Drivetrain drivetrain;
 extern lemlib::OdomSensors sensors;
