@@ -14,11 +14,11 @@ extern Motor motor_l1,
 extern MotorGroup left_motors,
     right_motors;
 
-extern MotorGroup intake;
+extern Motor chain;
+extern Motor roller;
 
 extern Imu imu;
 
-extern adi::DigitalOut rollers;
 extern adi::DigitalOut lever;
 extern adi::DigitalOut hook;
 
