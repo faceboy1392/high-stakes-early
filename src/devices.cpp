@@ -25,7 +25,15 @@ MotorGroup left_motors({motor_l1_port, motor_l2_port, motor_l3_port}, MotorGears
     right_motors({motor_r1_port, motor_r2_port, motor_r3_port}, MotorGearset::blue, MotorUnits::degrees);
 
 Motor chain(11, MotorGears::blue, MotorUnits::degrees);
-Motor roller(13);
+Motor roller(5);
+
+Motor ladybrown_motor(1, MotorGears::green, MotorUnits::degrees);
+Rotation ladybrown_sensor(2);
+adi::DigitalIn ladybrown_limit('H');
+
+Optical ring_detector(6);
+Distance ring_distance(4);
+Distance chain_detector(7);
 
 Imu imu(14);
 

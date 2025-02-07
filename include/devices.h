@@ -17,6 +17,14 @@ extern MotorGroup left_motors,
 extern Motor chain;
 extern Motor roller;
 
+extern Motor ladybrown_motor;
+extern Rotation ladybrown_sensor;
+extern adi::DigitalIn ladybrown_limit;
+
+extern Optical ring_detector;
+extern Distance ring_distance;
+extern Distance chain_detector;
+
 extern Imu imu;
 
 extern adi::DigitalOut lever;
