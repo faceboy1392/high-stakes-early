@@ -1,6 +1,6 @@
 #include "main.h"
 #include "liblvgl/core/lv_obj.h"
-// #include "pros/apix.h"
+#include "pros/apix.h"
 
 #include <algorithm>
 #include <math.h>
@@ -170,16 +170,35 @@ CompStatus getCompStatus()
 // AUTON STUFF
 enum AutonRoutine
 {
-  RED_LEFT,
-  RED_RIGHT,
-  BLUE_LEFT,
-  BLUE_RIGHT,
-  SKILLS,
-  DRIVE_FORWARD,
-  NONE
+  AUTON_BASIC,
+  AUTON_AGGRESSIVE,
+  AUTON_DEFENSIVE,  
+  AUTON_SKILLS,
+  AUTON_FORWARD,
+  AUTON_NONE
 };
 
-AutonRoutine chosen_auton = DRIVE_FORWARD;
+enum FieldSide
+{
+  /**
+   * red LEFT side
+   */
+  RED_POSITIVE,
+  /**
+   * red RIGHT side
+   */
+  RED_NEGATIVE,
+  /**
+   * blue LEFT side
+   */
+  BLUE_POSITIVE,
+  /**
+   * blue RIGHT side
+   */
+  BLUE_NEGATIVE
+};
+
+AutonRoutine chosen_auton = AUTON_FORWARD;
 bool auton_selector_active = false;
 
 unsigned long createRGB(int r, int g, int b)
@@ -194,7 +213,7 @@ unsigned long createRGBA(int r, int g, int b, int a)
 
 void brain_screen()
 {
-  /*
+  
 
   LV_IMG_DECLARE(match_field);
 
@@ -324,7 +343,7 @@ void brain_screen()
     screen::print(E_TEXT_LARGE_CENTER, 0, "NO AUTONOMOUS ROUTINE");
     break;
   }
-  */
+  
 
   // wah
 
@@ -481,6 +500,11 @@ void controllerAutonSelector()
   }
 }
 
+/**
+ * 1 - stow
+ * 2 - prime
+ * 3 - extend
+ */
 int ladybrown_state;
 double lb_offset;
 
@@ -535,15 +559,17 @@ enum RingColor
 {
   RED_RING,
   BLUE_RING,
-  NO_COLOR
+  NO_COLOR,
 };
 
+bool detected_ring = false;
 RingColor last_detected_ring_color = NO_COLOR;
 RingColor eject_color = NO_COLOR;
-bool eject_toggle = true;
+// bool eject_toggle = true;
 int previous_ejection_motor_pos = 0;
 
 int ring_ticker = 0;
+int color_ticker = 0;
 
 void detectRingColor()
 {
@@ -553,12 +579,16 @@ void detectRingColor()
   ring_ticker++;
 
   // master.print(0, 0, to_string(ring_detector.get_hue()).c_str());
+  if (ring_distance.get_distance() < 30 && color_ticker < 6)
+    color_ticker++;
+  else color_ticker = 0;
 
-  if (/*tick % 5 == 0 &&*/ ring_distance.get_distance() < 40)
+  if (color_ticker >= 6)
   {
+    detected_ring = true;
     int hue = ring_detector.get_hue();
     // if (hue > 180 && hue < 280)
-    if (hue > 100)
+    if (hue > 120)
     {
       last_detected_ring_color = BLUE_RING;
       ring_ticker = 0;
@@ -566,10 +596,10 @@ void detectRingColor()
       // delay(51);
       // master.rumble(".-");
       screen::set_pen(Color::blue);
-      screen::draw_rect(0, 0, 480, 240);
+      screen::fill_rect(0, 0, 480, 240);
     }
     // else if (hue > 0 && hue < 50)
-    else if (hue < 50)
+    else if (hue < 70)
     {
       last_detected_ring_color = RED_RING;
       ring_ticker = 0;
@@ -577,46 +607,128 @@ void detectRingColor()
       // delay(51);
       // master.rumble(".-");
       screen::set_pen(Color::red);
-      screen::draw_rect(0, 0, 480, 240);
+      screen::fill_rect(0, 0, 480, 240);
     }
   }
 
   // make sure to update this if i update the delay timer
-  if (ring_ticker == 10)
+  if (ring_ticker >= 15)
   {
     last_detected_ring_color = NO_COLOR;
+    detected_ring = false;
     // master.clear();
   }
 }
 
-void universalIntakeController() {
+/**
+ * -1 reverse
+ * 0 stop
+ * 1 intake
+ * 2 auto eject
+ */
+int intake_direction = 0;
+void universalIntakeController()
+{
   int unjam_ticker = 0;
   int eject_ticker = 0;
-  while (true) {
-    bool jammed = false;
+
+  double prev_chain_pos = chain.get_position();
+  double prev_eject_pos = -1000000; // arbitrary value
+
+  while (true)
+  {
+    prev_chain_pos = chain.get_position();
+    delay(10);
+
+    //* EJECT ACTIVATION
     bool eject = false;
 
+    // EJECTION CHAIN DETECTION
+    bool in_position_to_eject = false;
+    if (chain_detector.get_distance() < 30 && eject_ticker >= 10)
+    {
+      in_position_to_eject = true;
+      prev_eject_pos = chain.get_position();
+      // master.rumble(".");
+    }
 
-    if (jammed) {
+    // EJECTION GAP FILLING
+    double chain_diff = abs(chain.get_position() - prev_eject_pos) / 360.0;
+    // double chain_diff_mod = fmod(chain_diff, 4.0);
+    // if (chain_diff_mod >= 3.9 || chain_diff_mod <= 0.1)
+    if (chain_diff >= 3.99) {
+      in_position_to_eject = true;
+      prev_eject_pos -= 4.0 * 360 * signbit(chain_diff);
+    }
+
+    // must be calibrated by distance sensor to override the default value before it can be used
+    if (prev_eject_pos == -1000000)
+      in_position_to_eject = false;
+
+    // if (in_position_to_eject)
+    // {
+    //   master.rumble(".");
+    // }
+
+    // COLOR SORT
+    detectRingColor();
+    bool correct_color = last_detected_ring_color == eject_color && eject_color != NO_COLOR;
+
+    // holding both buttons force eject    
+    eject = in_position_to_eject && 
+      (correct_color || 
+        (
+          intake_direction == 2 &&
+          detected_ring // there should still be a ring there to eject
+        )
+      );
+
+    //* CONTROL
+    if (intake_direction >= 1) {
+      chain.move_velocity(600);
+    } else if (intake_direction == -1) {
+      chain.move_velocity(-600);
+    } else {
+      chain.move_velocity(0);
       unjam_ticker = 0;
     }
 
-    if (eject) {
-      eject_ticker = 0;
+    //* UNJAMMER
+    // (boldly) assuming this loop is PERFECTLY (and impossibly) fast with its 10msec delay,
+    // the chain should still move 3.6 degrees per cycle if the motor is at max speed
+    if (abs(chain.get_position() - prev_chain_pos < 0.5) && unjam_ticker >= 15)
+    {
+      unjam_ticker = 0;
       master.rumble("-");
       chain.move_velocity(-600);
       delay(200);
     }
-    delay(10);
+    else if (unjam_ticker < 15)
+      unjam_ticker++;
+
+    //* EJECTOR
+    if (eject && eject_ticker >= 15 && ladybrown_state != 1)
+    {
+      unjam_ticker = 0;
+      eject_ticker = 0;
+      master.rumble(".");
+      chain.set_brake_mode(MOTOR_BRAKE_BRAKE);
+      chain.brake();
+      delay(200);
+      chain.set_brake_mode(MOTOR_BRAKE_COAST);
+    }
+    else if (eject_ticker < 15)
+      eject_ticker++;
   }
 }
 
 Mutex unjammer_mutex;
 
 
+Task unjammer = Task(universalIntakeController);
 
 //* AUTON UNJAMMER
-Task unjammer = Task(unjammerPlaceholder);
+// Task unjammer = Task(unjammerPlaceholder);
 void autonIntakeUnjammer()
 {
   if (chosen_auton == SKILLS)
@@ -626,7 +738,7 @@ void autonIntakeUnjammer()
 
   double prev_position = chain.get_position();
   eject_color = BLUE_RING;
-  eject_toggle = true;
+  bool eject_toggle = true;
   int eject_ticker = 0;
   int ticker = 0;
   while (true)
@@ -706,34 +818,55 @@ void wait()
 }
 
 //! ---------------------------------------
+//! BASIC AUTONOMOUS ROUTINE
+//! ---------------------------------------
+void basicAutonRoutine(FieldSide side) {
+  int r = side == RED_POSITIVE || side == BLUE_NEGATIVE ? 1 : -1;
+
+  chassis.setPose({r * 24, 7.5+0, 0}, false);
+
+  roller.move(127);
+  hook.set_value(true);
+  delay(500);
+
+  //* stack adjacent to the goal
+  chassis.moveToPoint(r * (48 + 2), 48 + 2, 1000);
+  wait();
+
+  hook.set_value(false);
+  delay(400);
+
+  chassis.turnToPoint(r * 0, 48 + 1, 1000, {.forwards = false});
+  wait();
+  chassis.moveToPoint(r * (24 + 0), 48 + 1, 2000, {.forwards = false, .maxSpeed = 45});
+  wait();
+
+  //* grab goal
+  // delay(100);
+  lever.set_value(true);
+  intake_direction = 1;
+
+  delay(2000);
+  
+  chassis.turnToPoint(r*-100, 48, 1000);
+  chassis.moveToPoint(r*11, 48, 1500, {.maxSpeed = 60});
+  chassis.waitUntilDone();
+  
+  roller.brake();
+  intake_direction = 0;
+}
+
+//! ---------------------------------------
 //! CLOSE AUTONOMOUS ROUTINE
 //! ---------------------------------------
 /**
  * starts LEFT side by default
  */
-void closeAutonRoutine(bool mirror = false)
+void negativeAutonRoutine(bool mirror = false)
 {
   int r = mirror ? -1 : 1;
 
   chassis.setPose({r * 24, 7.5+2, 0}, false);
-
-  // //top of the middle stack
-  // chassis.moveToPose(r*8, 24, -90, 1000);
-  // wait();
-
-  // hook.set_value(true);
-  // roller.move(127);
-  // delay(500);
-  // hook.set_value(false);
-
-  // chassis.turnToPoint(r*24, 48, 1000, {.forwards = false});
-  // wait();
-  // chassis.moveToPoint(r*22, 44, 1000, {.forwards = false, .maxSpeed = 60});
-  // wait();
-  // delay(200);
-
-  // lever.set_value(true);
-  // delay(100);
 
   roller.move(127);
   hook.set_value(true);
@@ -754,7 +887,8 @@ void closeAutonRoutine(bool mirror = false)
   //* grab goal
   // delay(100);
   lever.set_value(true);
-  Task intake_unjammer = Task(autonIntakeUnjammer);
+  // Task intake_unjammer = Task(autonIntakeUnjammer);
+  intake_direction = 1;
 
   delay(200);
 
@@ -807,25 +941,6 @@ void farAutonRoutine(bool mirror = false)
   int r = mirror ? -1 : 1;
 }
 
-//! ---------------------------------------
-//! RED LEFT AUTONOMOUS
-//! ---------------------------------------
-void autonRedLeft() {}
-
-//! ---------------------------------------
-//! RED RIGHT AUTONOMOUS
-//! ---------------------------------------
-void autonRedRight() {}
-
-//! ---------------------------------------
-//! BLUE LEFT AUTONOMOUS
-//! ---------------------------------------
-void autonBlueLeft() {}
-
-//! ---------------------------------------
-//! BLUE RIGHT AUTONOMOUS
-//! ---------------------------------------
-void autonBlueRight() {}
 
 //! ---------------------------------------
 //! SKILLS AUTONOMOUS
@@ -1043,53 +1158,21 @@ void autonomous()
 
   // RIGHT I THINK
   // closeAutonRoutine(false);
-  // LEFT I THINK
-  closeAutonRoutine(true);
+  // LEFT I THINK 
+  negativeAutonRoutine(true);
+
+  // eject_color = BLUE_RING;
+  eject_color = RED_RING;
+  // basicAutonRoutine(RIGHT_SIDE);
   return;
-  chosen_auton = RED_LEFT;
-
-  switch (chosen_auton)
-  {
-  case RED_LEFT:
-    // autonRedLeft();
-    // farAutonRoutine(true);
-    break;
-  case RED_RIGHT:
-    closeAutonRoutine();
-    break;
-  case BLUE_LEFT:
-    closeAutonRoutine(true);
-    break;
-  case BLUE_RIGHT:
-    farAutonRoutine();
-    break;
-  case SKILLS:
-    autonSkills();
-    break;
-  case DRIVE_FORWARD:
-    autonDriveForward();
-    break;
-  case NONE:
-    // THIS ONE NORMALLY
-    // autonRedRight();
-    // autonRedLeft();
-
-    // autonSkills();
-
-    // autonBlueLeft();
-
-    // doubleSidedAuton(-1, false);
-
-    // chassis.moveToPoint(0, 24, 1000);
-    // lever.set_value(true);
-    // delay(1000);
-    // chassis.turnToPoint(24, 0, 1000);
-    break;
-  }
+  chosen_auton = AUTON_BASIC;
+  
+  
 }
 
 void driverIntakeUnjammer()
 {
+  return;
   while (unjammer_mutex.take(0))
   {
     delay(50);
@@ -1136,7 +1219,7 @@ void driverIntakeUnjammer()
       // master.rumble(".");
     }
 
-    bool eject = eject_toggle &&
+    bool eject = 
                  eject_ticker_ok &&
                  (distance_triggered || gap_filler) &&
                  color_matched &&
@@ -1222,7 +1305,7 @@ void opcontrol()
 
   auton_selector_active = false;
 
-  eject_toggle = false;
+  // eject_toggle = true;
 
   left_motors.set_brake_mode(MOTOR_BRAKE_COAST);
   right_motors.set_brake_mode(MOTOR_BRAKE_COAST);
@@ -1234,7 +1317,7 @@ void opcontrol()
   // bool lever_state = false;
   // bool hook_state = false;
 
-  Task unjammer = Task(driverIntakeUnjammer);
+  // Task unjammer = Task(driverIntakeUnjammer);
 
   bool ladybrown_oncer = false;
   int ladybrown_ticker = 0;
@@ -1361,17 +1444,24 @@ void opcontrol()
     if (master.get_digital(DIGITAL_R1))
     {
       // chain.move_velocity(chain_speed);
+      if (master.get_digital(DIGITAL_R2)) {
+        intake_direction = 2;
+      } else {
+        intake_direction = 1;
+      }
       roller.move(127);
     }
     else if (master.get_digital(DIGITAL_R2))
     {
       // chain.move_velocity(-chain_speed);
       roller.move(-127);
+      intake_direction = -1;
     }
     else
     {
       // chain.move(0);
       roller.move(0);
+      intake_direction = 0;
     }
 
     //* DRIVE CODE
