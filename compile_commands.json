@@ -75,11 +75,11 @@
             "-funwind-tables",
             "--std=gnu++20",
             "-o",
-            "bin/ControllerUI.cpp.o",
-            "src\\ControllerUI.cpp"
+            "bin/PID.cpp.o",
+            "src\\PID.cpp"
         ],
         "directory": "C:\\Users\\student001\\Documents\\pros-projects\\74559a-early-season",
-        "file": "src\\ControllerUI.cpp"
+        "file": "src\\PID.cpp"
     },
     {
         "arguments": [
@@ -116,11 +116,11 @@
             "-funwind-tables",
             "--std=gnu++20",
             "-o",
-            "bin/PID.cpp.o",
-            "src\\PID.cpp"
+            "bin/ControllerUI.cpp.o",
+            "src\\ControllerUI.cpp"
         ],
         "directory": "C:\\Users\\student001\\Documents\\pros-projects\\74559a-early-season",
-        "file": "src\\PID.cpp"
+        "file": "src\\ControllerUI.cpp"
     },
     {
         "arguments": [

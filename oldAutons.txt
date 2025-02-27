@@ -461,3 +461,406 @@ void doubleSidedAuton(int d, bool extended)
   left_motors.move(127);
   right_motors.move(-127);
 }
+
+
+
+
+
+
+
+
+
+/*
+  rollers.set_value(true);
+  chassis.setPose({31, 9, 0}, false);
+
+  chassis.moveToPoint(48, 48, 1000);
+  // chassis.waitUntil(36);
+  chassis.waitUntilDone();
+  intake.move_velocity(200);
+  delay(300);
+  // delay(350);
+
+  // move to first goal
+  chassis.turnToPoint(0, 48, 500, {.forwards = false}, true);
+  delay(100);
+  intake.brake();
+  chassis.waitUntilDone();
+  chassis.moveToPoint(24, 48 + 2, 1000, {.forwards = false, .maxSpeed = 50});
+  chassis.waitUntilDone();
+  delay(150);
+  lever.set_value(true);
+  intake.move_velocity(200);
+  delay(600);
+  intake.move_velocity(-100);
+  delay(300);
+  chassis.turnToPoint(0, 0, 1000);
+  chassis.waitUntilDone();
+
+  intake.move_velocity(200);
+  chassis.moveToPoint(0, 33, 1500);
+  chassis.waitUntilDone();
+
+  intake.move_velocity(200);
+  // intake.brake();
+  chassis.moveToPoint(-32, 32, 1000);
+  chassis.waitUntilDone();
+
+  lever.set_value(false);
+  intake.move_velocity(200);
+  chassis.turnToPoint(-48, 48, 1000);
+  chassis.moveToPoint(-48, 48, 1000, {}, true);
+  // chassis.moveToPose(-48, 48, 315, 1500);
+  delay(900);
+  intake.brake();
+  chassis.turnToPoint(-24, 48, 1000, {.forwards = false});
+  delay(100);
+  chassis.moveToPoint(-18, 48, 1000, {.forwards = false, .maxSpeed = 50});
+  chassis.waitUntilDone();
+  lever.set_value(true);
+  intake.move_velocity(200);
+  delay(500);
+  chassis.turnToPoint(0, 48, 1000);
+
+  chassis.waitUntilDone();
+  delay(300);
+
+  left_motors.set_brake_mode(MOTOR_BRAKE_COAST);
+  right_motors.set_brake_mode(MOTOR_BRAKE_COAST);
+
+  intake.move(40);
+  chassis.moveToPoint(-6, 52, 800);
+  chassis.waitUntilDone();
+
+  lever.set_value(false);
+
+  delay(3000);
+  intake.brake();
+  */
+
+
+
+
+
+
+
+
+  /*
+void controllerAutonSelector()
+{
+  auton_selector_active = true;
+
+  int cursor_x = 1, cursor_y = 2;
+  bool selected = false;
+
+  string auton_options[6] = {"Red.L", "Blu.R", "Red.R", "Blu.L", "Skills", "EXIT"};
+  AutonRoutine auton_options_enums[6] = {RED_LEFT, BLUE_RIGHT, RED_RIGHT, BLUE_LEFT, SKILLS, NONE};
+
+  // ", -, and [] are the same char width so they can be swapped without messing things up
+
+  int ticker = 0;
+
+  while (true)
+  {
+    ticker++;
+
+    if (master.get_digital_new_press(DIGITAL_A) || master.get_digital_new_press(DIGITAL_Y))
+    {
+      if (selected == false)
+        selected = true;
+      else
+        selected = false;
+    }
+    if (master.get_digital_new_press(DIGITAL_UP) && !selected)
+    {
+      cursor_y--;
+      if (cursor_y < 0)
+        cursor_y = 0;
+    }
+    if (master.get_digital_new_press(DIGITAL_DOWN) && !selected)
+    {
+      cursor_y++;
+      if (cursor_y > 2)
+        cursor_y = 2;
+    }
+    if (master.get_digital_new_press(DIGITAL_LEFT) && !selected)
+    {
+      cursor_x--;
+      if (cursor_x < 0)
+        cursor_x = 0;
+    }
+    if (master.get_digital_new_press(DIGITAL_RIGHT) && !selected)
+    {
+      cursor_x++;
+      if (cursor_x > 1)
+        cursor_x = 1;
+    }
+
+    string lines[3] = {"", "", ""};
+    // add each auton option to the strings
+    for (int i = 0; i < 3; i++)
+    {
+
+      if (cursor_x == 0 && cursor_y == i)
+      {
+        if (selected)
+          lines[i] += "[";
+        else
+          lines[i] += "\"";
+      }
+      else
+      {
+        lines[i] += "-";
+      }
+
+      lines[i] += auton_options[i * 2];
+
+      if (cursor_x == 0 && cursor_y == i)
+      {
+        if (selected)
+          lines[i] += "]";
+        else
+          lines[i] += "-";
+      }
+      else if (cursor_x == 1 && cursor_y == i)
+      {
+        if (selected)
+          lines[i] += "[";
+        else
+          lines[i] += "-";
+      }
+      else
+      {
+        lines[i] += "-";
+      }
+
+      lines[i] += auton_options[i * 2 + 1];
+
+      if (cursor_x == 1 && cursor_y == i)
+      {
+        if (selected)
+          lines[i] += "]";
+        else
+          lines[i] += "\"";
+      }
+      else
+      {
+        lines[i] += "-";
+      }
+    }
+
+    if (ticker > 15)
+    {
+      ticker = 0;
+      printToController(lines[0], lines[1], lines[2]);
+      if (selected)
+        chosen_auton = auton_options_enums[cursor_y * 2 + cursor_x];
+      else
+        chosen_auton = DRIVE_FORWARD;
+    }
+
+    delay(11);
+
+    if (!auton_selector_active || (chosen_auton == NONE && selected))
+    {
+      auton_selector_active = false;
+      master.clear();
+      break;
+    }
+  }
+}
+*/
+
+
+SKILLS
+/*
+  chassis.setPose({18 + 1, 15 + 3, 210});
+
+  chassis.moveToPoint(24, 24, 1000, {.forwards = false, .maxSpeed = 50});
+  chassis.waitUntilDone();
+
+  delay(300);
+  lever.set_value(true);
+
+  unjammer.remove();
+  unjammer = Task(autonIntakeUnjammer);
+
+  roller.move(127);
+  delay(300);
+
+  // testing coords
+  // chassis.turnToPoint(0, 24, 1000);
+  // chassis.moveToPoint(0, 24, 1000);
+  // return;
+
+  // close to ladder ring
+  chassis.turnToPoint(24, 48, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+  chassis.moveToPoint(24, 48, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+
+  chassis.turnToPoint(48, 48, 1000);
+  chassis.waitUntilDone();
+  delay(500);
+  chassis.moveToPoint(48, 48, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+
+  // right side of the ring triangle
+  chassis.turnToPoint(48, 24 - 24, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+  chassis.moveToPoint(48, 24, 2000);
+  chassis.waitUntilDone();
+  delay(1000);
+
+  chassis.turnToPoint(60, 28, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+  chassis.moveToPoint(60 - 4, 24, 2000);
+  chassis.waitUntilDone();
+  delay(1500);
+
+  // go drop the thing in the corner
+  chassis.moveToPoint(30, 30, 2000, {.maxSpeed = 40});
+  chassis.moveToPoint(60 - 5, 12 + 5, 2000, {.forwards = false});
+  chassis.waitUntilDone();
+
+  delay(1000);
+
+  unjammer.suspend();
+  chain.brake();
+  delay(200);
+  lever.set_value(false);
+  delay(100);
+
+  // ! WAAAA
+  // return;
+
+  chassis.moveToPoint(0, 24, 2000);
+  chassis.turnToPoint(-24, 24, 2000, {.forwards = false});
+  chassis.moveToPoint(-24, 24, 2000, {.forwards = false, .maxSpeed = 60});
+  chassis.waitUntilDone();
+
+  // second goal
+  delay(300);
+  lever.set_value(true);
+  delay(300);
+  unjammer.resume();
+
+  // ! MIRROR POINT START
+
+  // close to ladder ring
+  chassis.turnToPoint(-24, 48, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+  chassis.moveToPoint(-24, 48, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+
+  // ! extra piece
+
+  // ! end extra piece
+
+  chassis.turnToPoint(-48, 48, 1000);
+  chassis.waitUntilDone();
+  delay(500);
+  chassis.moveToPoint(-48, 48, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+
+  // right side of the ring triangle
+  chassis.turnToPoint(-48, 24 - 24, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+  chassis.moveToPoint(-48, 24 - 6, 2000);
+  chassis.waitUntilDone();
+  delay(1000);
+
+  chassis.turnToPoint(-60, 24, 2000);
+  chassis.waitUntilDone();
+  delay(500);
+  chassis.moveToPoint(-60 + 4, 24, 2000);
+  chassis.waitUntilDone();
+  delay(1500);
+
+  // go drop the thing in the corner
+  chassis.moveToPoint(-30, 30, 2000);
+  chassis.moveToPoint(-60 - 5, 12 - 5, 2000, {.forwards = false});
+  chassis.waitUntilDone();
+
+  delay(1000);
+
+  unjammer.suspend();
+  chain.brake();
+  delay(200);
+  lever.set_value(false);
+  delay(100);
+
+  // ! MIRROR POINT END
+
+  // chassis.moveToPoint(-38, 36, 1000);
+  // chassis.turnToPoint(0 - 3, 72 + 48, 2000, {.forwards = false});
+  // chassis.moveToPoint(0 - 3, 72 + 48, 2000, {.forwards = false});
+  // chassis.waitUntilDone();
+  chassis.moveToPoint(-48, 72, 3000);
+
+  chassis.moveToPoint(0, 72 + 60, 3000);
+  chassis.turnToPoint(-24, 72 + 60, 2000, {.forwards = false});
+  chassis.moveToPoint(-24, 72 + 60, 2000, {.forwards = false, .maxSpeed = 40});
+
+  chassis.waitUntilDone();
+
+  delay(200);
+  lever.set_value(true);
+  delay(200);
+
+  chassis.turnToPoint(-72, 72 + 72, 1000);
+
+  chassis.turnToPoint(-72, 72 + 72, 2000, {.forwards = false});
+  chassis.moveToPoint(-72 + 5, 72 + 72 - 5, 4000, {.forwards = false});
+  chassis.waitUntilDone();
+  delay(200);
+
+  lever.set_value(false);
+
+  // chassis.moveToPoint(-48, 72 + 24, 2000);
+  // chassis.waitUntilDone();
+  // chassis.turnToPoint(-24, 72 + 48, 2000);
+  // chassis.moveToPoint(-24, 72 + 44, 2000);
+  // chassis.waitUntilDone();
+  // chassis.turnToPoint(0, 0, 2000);
+  // chassis.turnToPoint(0 + 24, 72 + 48, 2000, {.forwards = false});
+  // chassis.moveToPoint(0 - 3, 72 + 48, 2000, {.forwards = false});
+  // chassis.waitUntilDone();
+
+  // delay(200);
+  // lever.set_value(true);
+  // delay(200);
+  // unjammer.resume();
+
+  // chassis.turnToPoint(24, 72 + 24, 2000);
+  // chassis.moveToPoint(24, 72 + 24, 2000);
+  // chassis.waitUntilDone();
+  // delay(1000);
+
+  // unjammer.suspend();
+  // chain.brake();
+
+  // chassis.turnToPoint(0, 72, 2000);
+  // chassis.waitUntilDone();
+  // chassis.moveToPoint(0, 72, 2000);
+  // chassis.waitUntilDone();
+  // chassis.turnToPoint(-24, 72 + 24, 2000);
+  // chassis.waitUntilDone();
+  // chassis.moveToPoint(-24 - 4, 72 + 24 + 4, 2000);
+  // chassis.waitUntilDone();
+
+  // unjammer.resume();
+  // delay(1000);
+
+  // unjammer.remove();
+  unjammer.remove();
+  */

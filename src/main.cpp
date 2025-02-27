@@ -6,12 +6,12 @@
 #include <math.h>
 #include <string.h>
 
-#include "ControllerUI.h"
+// #include "ControllerUI.h"
 #include "devices.h"
 #include "pros/screen.h"
 #include "pros/screen.hpp"
 
-#include "PID.h"
+// #include "PID.h"
 
 using namespace std;
 
@@ -135,6 +135,29 @@ rgb hsv2rgb(hsv in)
   return out;
 }
 
+unsigned long createRGB(int r, int g, int b)
+{
+  return ((r & 0xff) << 16) + ((g & 0xff) << 8) + (b & 0xff);
+}
+unsigned long createRGBA(int r, int g, int b, int a)
+{
+  return ((r & 0xff) << 24) + ((g & 0xff) << 16) + ((b & 0xff) << 8) +
+         (a & 0xff);
+}
+
+/*
+ *  _____                              ___
+ * | ____|_ __  _   _ _ __ ___  ___   ( _ )
+ * |  _| | '_ \| | | | '_ ` _ \/ __|  / _ \/\
+ * | |___| | | | |_| | | | | | \__ \ | (_>  <
+ * |_____|_| |_|\__,_|_| |_| |_|___/  \___/\/
+ * \ \   / /_ _ _ __(_) __ _| |__ | | ___  ___
+ *  \ \ / / _` | '__| |/ _` | '_ \| |/ _ \/ __|
+ *   \ V / (_| | |  | | (_| | |_) | |  __/\__ \
+ *    \_/ \__,_|_|  |_|\__,_|_.__/|_|\___||___/
+ */
+
+//* Competition status
 enum CompStatus
 {
   DISABLED,
@@ -143,7 +166,7 @@ enum CompStatus
   DISCONNECTED
 };
 
-CompStatus getCompStatus()
+CompStatus get_competition_status()
 {
   if (!competition::is_connected())
     return DISCONNECTED;
@@ -154,30 +177,17 @@ CompStatus getCompStatus()
   return OPCONTROL;
 }
 
-// string getCompStatusString() {
-//   switch (getCompStatus()) {
-//   case DISCONNECTED:
-//     return "DISCNCTD";
-//   case AUTONOMOUS:
-//     return "AUTON";
-//   case DISABLED:
-//     return "DISABLED";
-//   case OPCONTROL:
-//     return "DRIVER";
-//   }
-// }
+//* Autonomous selection
 
-// AUTON STUFF
 enum AutonRoutine
 {
+  AUTON_NONE,
+  AUTON_FORWARD,
   AUTON_BASIC,
   AUTON_AGGRESSIVE,
-  AUTON_DEFENSIVE,  
-  AUTON_SKILLS,
-  AUTON_FORWARD,
-  AUTON_NONE
+  AUTON_DEFENSIVE,
+  AUTON_SKILLS
 };
-
 enum FieldSide
 {
   /**
@@ -197,23 +207,128 @@ enum FieldSide
    */
   BLUE_NEGATIVE
 };
+enum LeftOrRight
+{
+  LEFT,
+  RIGHT
+};
+enum PositiveOrNegative
+{
+  POSITIVE,
+  NEGATIVE
+};
+enum AllianceColor
+{
+  ALLIANCE_RED,
+  ALLIANCE_BLUE,
+  ALLIANCE_NEITHER // comes in handy for color sort
+};
 
-AutonRoutine chosen_auton = AUTON_FORWARD;
+AutonRoutine selected_auton = AUTON_FORWARD;
+FieldSide selected_field_side = RED_POSITIVE; // arbitrary default
 bool auton_selector_active = false;
 
-unsigned long createRGB(int r, int g, int b)
+//* Color sorting
+// enum AllianceColor
+// {
+//   ALLIANCE_RED,
+//   ALLIANCE_BLUE,
+//   ALLIANCE_NEITHER,
+// };
+
+AllianceColor ring_color_to_eject = ALLIANCE_NEITHER;
+
+/**
+ * for reliable, colorblind ring ejection
+ */
+bool detected_ring = false;
+AllianceColor last_detected_ring_color = ALLIANCE_NEITHER;
+
+int ring_detection_reset_ticker = 0;
+
+/**
+ * @deprecated im gonna make this system better
+ */
+int color_ticker = 0;
+
+// color averaging
+int color_hue_sum = 0;
+int color_avg_ticks = 0;
+int color_avg_fluke_ticker = 0; // don't reset the avg until you are sure the ring is gone
+
+int previous_ejection_motor_pos = 0;
+
+//* Ladybrown
+/**
+ * 1 - stow
+ * 2 - prime
+ * 3 - extend
+ */
+int ladybrown_state;
+
+int lb_pos_stow = -5,
+    lb_pos_prime = -100,
+    lb_pos_extend = -650;
+
+/**
+ * in degrees, to account for starting the program with the ladybrown in a different position
+ */
+double ladybrown_offset = 0;
+
+//* Intake
+/**
+ * -1 reverse
+ * 0 stop
+ * 1 intake
+ * 2 always eject
+ * 3 slow speed
+ */
+int intake_direction = 0;
+
+/*
+ *  _   _      _
+ * | | | | ___| |_ __   ___ _ __
+ * | |_| |/ _ \ | '_ \ / _ \ '__|
+ * |  _  |  __/ | |_) |  __/ |
+ * |_|_|_|\___|_| .__/ \___|_|_
+ * |  ___|   _ _|_|   ___| |_(_) ___  _ __  ___
+ * | |_ | | | | '_ \ / __| __| |/ _ \| '_ \/ __|
+ * |  _|| |_| | | | | (__| |_| | (_) | | | \__ \
+ * |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
+ */
+
+LeftOrRight left_or_right(FieldSide side)
 {
-  return ((r & 0xff) << 16) + ((g & 0xff) << 8) + (b & 0xff);
+  if (side == RED_NEGATIVE || side == BLUE_POSITIVE)
+    return LEFT;
+  else if (side == RED_POSITIVE || side == BLUE_NEGATIVE)
+    return RIGHT;
 }
-unsigned long createRGBA(int r, int g, int b, int a)
+PositiveOrNegative positive_or_negative(FieldSide side)
 {
-  return ((r & 0xff) << 24) + ((g & 0xff) << 16) + ((b & 0xff) << 8) +
-         (a & 0xff);
+  if (side == RED_POSITIVE || side == BLUE_POSITIVE)
+    return POSITIVE;
+  else if (side == RED_NEGATIVE || side == BLUE_NEGATIVE)
+    return NEGATIVE;
+}
+AllianceColor red_or_blue(FieldSide side)
+{
+  if (side == RED_POSITIVE || side == RED_NEGATIVE)
+    return ALLIANCE_RED;
+  else if (side == BLUE_POSITIVE || side == BLUE_NEGATIVE)
+    return ALLIANCE_BLUE;
+}
+AllianceColor invert_red_blue(AllianceColor color)
+{
+  if (color == ALLIANCE_RED)
+    return ALLIANCE_BLUE;
+  else if (color == ALLIANCE_BLUE)
+    return ALLIANCE_RED;
+  return ALLIANCE_NEITHER;
 }
 
 void brain_screen()
 {
-  
 
   LV_IMG_DECLARE(match_field);
 
@@ -281,7 +396,7 @@ void brain_screen()
 
   // top left is red left, bottom left is red right (their perspective facing
   // the field) top right is blue right, bottom right is blue left
-
+  /*
   if (screen::touch_status().x < 240)
   {
     if (screen::touch_status().y < 120)
@@ -343,7 +458,7 @@ void brain_screen()
     screen::print(E_TEXT_LARGE_CENTER, 0, "NO AUTONOMOUS ROUTINE");
     break;
   }
-  
+  */
 
   // wah
 
@@ -366,7 +481,7 @@ void brain_screen()
   */
 }
 
-void printToController(string line1, string line2, string line3)
+void print_to_controller(string line1, string line2, string line3)
 {
   master.print(0, 0, line1.c_str());
   delay(51);
@@ -376,212 +491,63 @@ void printToController(string line1, string line2, string line3)
   delay(51);
 }
 
-void controllerAutonSelector()
-{
-  auton_selector_active = true;
-
-  int cursor_x = 1, cursor_y = 2;
-  bool selected = false;
-
-  string auton_options[6] = {"Red.L", "Blu.R", "Red.R", "Blu.L", "Skills", "EXIT"};
-  AutonRoutine auton_options_enums[6] = {RED_LEFT, BLUE_RIGHT, RED_RIGHT, BLUE_LEFT, SKILLS, NONE};
-
-  // ", -, and [] are the same char width so they can be swapped without messing things up
-
-  int ticker = 0;
-
-  while (true)
-  {
-    ticker++;
-
-    if (master.get_digital_new_press(DIGITAL_A) || master.get_digital_new_press(DIGITAL_Y))
-    {
-      if (selected == false)
-        selected = true;
-      else
-        selected = false;
-    }
-    if (master.get_digital_new_press(DIGITAL_UP) && !selected)
-    {
-      cursor_y--;
-      if (cursor_y < 0)
-        cursor_y = 0;
-    }
-    if (master.get_digital_new_press(DIGITAL_DOWN) && !selected)
-    {
-      cursor_y++;
-      if (cursor_y > 2)
-        cursor_y = 2;
-    }
-    if (master.get_digital_new_press(DIGITAL_LEFT) && !selected)
-    {
-      cursor_x--;
-      if (cursor_x < 0)
-        cursor_x = 0;
-    }
-    if (master.get_digital_new_press(DIGITAL_RIGHT) && !selected)
-    {
-      cursor_x++;
-      if (cursor_x > 1)
-        cursor_x = 1;
-    }
-
-    string lines[3] = {"", "", ""};
-    // add each auton option to the strings
-    for (int i = 0; i < 3; i++)
-    {
-
-      if (cursor_x == 0 && cursor_y == i)
-      {
-        if (selected)
-          lines[i] += "[";
-        else
-          lines[i] += "\"";
-      }
-      else
-      {
-        lines[i] += "-";
-      }
-
-      lines[i] += auton_options[i * 2];
-
-      if (cursor_x == 0 && cursor_y == i)
-      {
-        if (selected)
-          lines[i] += "]";
-        else
-          lines[i] += "-";
-      }
-      else if (cursor_x == 1 && cursor_y == i)
-      {
-        if (selected)
-          lines[i] += "[";
-        else
-          lines[i] += "-";
-      }
-      else
-      {
-        lines[i] += "-";
-      }
-
-      lines[i] += auton_options[i * 2 + 1];
-
-      if (cursor_x == 1 && cursor_y == i)
-      {
-        if (selected)
-          lines[i] += "]";
-        else
-          lines[i] += "\"";
-      }
-      else
-      {
-        lines[i] += "-";
-      }
-    }
-
-    if (ticker > 15)
-    {
-      ticker = 0;
-      printToController(lines[0], lines[1], lines[2]);
-      if (selected)
-        chosen_auton = auton_options_enums[cursor_y * 2 + cursor_x];
-      else
-        chosen_auton = DRIVE_FORWARD;
-    }
-
-    delay(11);
-
-    if (!auton_selector_active || (chosen_auton == NONE && selected))
-    {
-      auton_selector_active = false;
-      master.clear();
-      break;
-    }
-  }
-}
-
-/**
- * 1 - stow
- * 2 - prime
- * 3 - extend
- */
-int ladybrown_state;
-double lb_offset;
-
-void initialize()
-{
-  left_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
-  right_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
-
-  chassis.calibrate();
-
-  master.clear();
-
-  double lb_sensor_pos = ladybrown_sensor.get_position() / 100.0;
-
-  delay(80);
-  // print the angle
-  master.print(0, 0, "Angle: ");
-  delay(80);
-  master.print(1, 0, to_string(lb_sensor_pos).c_str());
-  ladybrown_state = lb_sensor_pos > 10 ? 1 : 0;
-  lb_offset = ladybrown_state == 1 ? lb_sensor_pos * 5 : 0;
-
-  delay(50);
-  // master.print(0, 0, "Calibrating...");
-  // partner.print(0, 0, "Calibrating...");
-
-  // calibration
-
-  // controller task
-  Task controller_task(controllerAutonSelector);
-
-  ring_detector.set_led_pwm(100);
-  ring_detector.disable_gesture();
-
-  // brain screen task
-  // Task brain_task(brain_screen);
-}
-
-void disabled() {}
-
-void competition_initialize() {}
-
-void unjammerPlaceholder()
-{
-  while (true)
-  {
-    delay(1000000);
-  }
-}
-
-enum RingColor
-{
-  RED_RING,
-  BLUE_RING,
-  NO_COLOR,
-};
-
-bool detected_ring = false;
-RingColor last_detected_ring_color = NO_COLOR;
-RingColor eject_color = NO_COLOR;
-// bool eject_toggle = true;
-int previous_ejection_motor_pos = 0;
-
-int ring_ticker = 0;
-int color_ticker = 0;
-
-void detectRingColor()
+void detect_ring_color()
 {
   // blue 210
   // red 20 ish
 
-  ring_ticker++;
+  ring_detection_reset_ticker++;
 
+  if (ring_distance.get_distance() < 20)
+  {
+    color_hue_sum += ring_detector.get_hue();
+    color_avg_ticks++;
+
+    color_avg_fluke_ticker = 0;
+
+    ring_detection_reset_ticker = 0;
+  }
+  else
+  {
+    color_avg_fluke_ticker++;
+  }
+
+  if (color_avg_ticks > 3)
+  {
+    if (color_hue_sum / color_avg_ticks > 50)
+    {
+      detected_ring = true;
+      last_detected_ring_color = ALLIANCE_BLUE;
+      screen::set_pen(Color::blue);
+      screen::fill_rect(0, 0, 480, 240);
+    }
+    else
+    {
+      detected_ring = true;
+      last_detected_ring_color = ALLIANCE_RED;
+      screen::set_pen(Color::red);
+      screen::fill_rect(0, 0, 480, 240);
+    }
+  }
+
+  if (ring_detection_reset_ticker > 15)
+  {
+    last_detected_ring_color = ALLIANCE_NEITHER;
+  }
+
+  if (color_avg_fluke_ticker >= 5)
+  {
+    screen::erase_rect(120, 60, 360, 180);
+    color_hue_sum = 0;
+    color_avg_ticks = 0;
+  }
+
+  /*
   // master.print(0, 0, to_string(ring_detector.get_hue()).c_str());
   if (ring_distance.get_distance() < 30 && color_ticker < 6)
     color_ticker++;
-  else color_ticker = 0;
+  else
+    color_ticker = 0;
 
   if (color_ticker >= 6)
   {
@@ -590,44 +556,36 @@ void detectRingColor()
     // if (hue > 180 && hue < 280)
     if (hue > 120)
     {
-      last_detected_ring_color = BLUE_RING;
-      ring_ticker = 0;
-      // master.print(0, 0, "BLUE");
-      // delay(51);
-      // master.rumble(".-");
+      last_detected_ring_color = ALLIANCE_BLUE;
+      ring_detection_reset_ticker = 0;
       screen::set_pen(Color::blue);
       screen::fill_rect(0, 0, 480, 240);
     }
     // else if (hue > 0 && hue < 50)
     else if (hue < 70)
     {
-      last_detected_ring_color = RED_RING;
-      ring_ticker = 0;
-      // master.print(0, 0, "RED");
-      // delay(51);
-      // master.rumble(".-");
+      last_detected_ring_color = ALLIANCE_RED;
+      ring_detection_reset_ticker = 0;
       screen::set_pen(Color::red);
       screen::fill_rect(0, 0, 480, 240);
     }
   }
+  */
 
   // make sure to update this if i update the delay timer
-  if (ring_ticker >= 15)
+  if (ring_detection_reset_ticker >= 15)
   {
-    last_detected_ring_color = NO_COLOR;
+    last_detected_ring_color = ALLIANCE_NEITHER;
     detected_ring = false;
+    // screen::erase();
+    // white rectangle in the middle
+    screen::set_pen(Color::white);
+    screen::fill_rect(120, 60, 360, 180);
     // master.clear();
   }
 }
 
-/**
- * -1 reverse
- * 0 stop
- * 1 intake
- * 2 auto eject
- */
-int intake_direction = 0;
-void universalIntakeController()
+void universal_intake_controller()
 {
   int unjam_ticker = 0;
   int eject_ticker = 0;
@@ -656,7 +614,8 @@ void universalIntakeController()
     double chain_diff = abs(chain.get_position() - prev_eject_pos) / 360.0;
     // double chain_diff_mod = fmod(chain_diff, 4.0);
     // if (chain_diff_mod >= 3.9 || chain_diff_mod <= 0.1)
-    if (chain_diff >= 3.99) {
+    if (chain_diff >= 3.99)
+    {
       in_position_to_eject = true;
       prev_eject_pos -= 4.0 * 360 * signbit(chain_diff);
     }
@@ -671,24 +630,31 @@ void universalIntakeController()
     // }
 
     // COLOR SORT
-    detectRingColor();
-    bool correct_color = last_detected_ring_color == eject_color && eject_color != NO_COLOR;
+    detect_ring_color();
+    bool correct_color = (last_detected_ring_color == ring_color_to_eject) && (ring_color_to_eject != ALLIANCE_NEITHER);
 
-    // holding both buttons force eject    
-    eject = in_position_to_eject && 
-      (correct_color || 
-        (
-          intake_direction == 2 &&
-          detected_ring // there should still be a ring there to eject
-        )
-      );
+    // holding both buttons force eject
+    eject = in_position_to_eject &&
+            (correct_color ||
+             (intake_direction == 2 &&
+              detected_ring // there should still be a ring there to eject
+              ));
 
     //* CONTROL
-    if (intake_direction >= 1) {
+    if (intake_direction == 3)
+    {
+      chain.move_velocity(400);
+    }
+    else if (intake_direction >= 1)
+    {
       chain.move_velocity(600);
-    } else if (intake_direction == -1) {
+    }
+    else if (intake_direction == -1)
+    {
       chain.move_velocity(-600);
-    } else {
+    }
+    else
+    {
       chain.move_velocity(0);
       unjam_ticker = 0;
     }
@@ -696,7 +662,7 @@ void universalIntakeController()
     //* UNJAMMER
     // (boldly) assuming this loop is PERFECTLY (and impossibly) fast with its 10msec delay,
     // the chain should still move 3.6 degrees per cycle if the motor is at max speed
-    if (abs(chain.get_position() - prev_chain_pos < 0.5) && unjam_ticker >= 15)
+    if (abs(chain.get_position() - prev_chain_pos) < 0.5 && unjam_ticker >= 15)
     {
       unjam_ticker = 0;
       master.rumble("-");
@@ -707,8 +673,11 @@ void universalIntakeController()
       unjam_ticker++;
 
     //* EJECTOR
-    if (eject && eject_ticker >= 15 && ladybrown_state != 1)
+    if (eject && (eject_ticker >= 15) && (ladybrown_state != 1))
     {
+      last_detected_ring_color = ALLIANCE_NEITHER;
+      detected_ring = false;
+
       unjam_ticker = 0;
       eject_ticker = 0;
       master.rumble(".");
@@ -721,109 +690,55 @@ void universalIntakeController()
       eject_ticker++;
   }
 }
+Task unjammer = Task(universal_intake_controller);
 
-Mutex unjammer_mutex;
-
-
-Task unjammer = Task(universalIntakeController);
-
-//* AUTON UNJAMMER
-// Task unjammer = Task(unjammerPlaceholder);
-void autonIntakeUnjammer()
+void controller_screen()
 {
-  if (chosen_auton == SKILLS)
-    unjammer_mutex.take(59 * 1000);
-  else
-    unjammer_mutex.take(14.5 * 1000);
-
-  double prev_position = chain.get_position();
-  eject_color = BLUE_RING;
-  bool eject_toggle = true;
-  int eject_ticker = 0;
-  int ticker = 0;
   while (true)
   {
-    detectRingColor();
-    bool distance_triggered = chain_detector.get_distance() < 40;
-    bool color_matched = last_detected_ring_color == eject_color;
-    bool eject_ticker_ok = eject_ticker > 4;
-
-    //* GAP FILLING
-    double chain_diff = abs(previous_ejection_motor_pos - chain.get_position());
-    bool gap_filler = false;
-
-    if (chain_diff / 360.0 >= 4.0)
-    {
-      gap_filler = true;
-    }
-
-    if ((distance_triggered || gap_filler) && eject_ticker_ok)
-    {
-      previous_ejection_motor_pos = chain.get_position();
-      // master.rumble(".");
-    }
-
-    bool eject = eject_toggle &&
-                 eject_ticker_ok &&
-                 (distance_triggered || gap_filler) &&
-                 color_matched &&
-                 eject_color != NO_COLOR;
-
-    if (eject)
-      eject_ticker = 0;
-    else if (eject_ticker < 10)
-      eject_ticker++;
-
-    prev_position = chain.get_position();
-    chain.move_velocity(600);
     delay(10);
 
-    if (eject)
-    {
-      // disable_gap_filler = true;
-      chain.set_brake_mode(MOTOR_BRAKE_BRAKE);
-      chain.brake();
-      master.rumble(".");
-      delay(100);
-      chain.set_brake_mode(MOTOR_BRAKE_COAST);
-      ticker = 0;
-    }
+    string line1 = "";
+    string line2 = "";
+    string line3 = "";
 
-    if (ticker < 40)
-      ticker++;
-
-    if (abs(prev_position - chain.get_position()) < 1 && ticker >= 15)
-    {
-      master.rumble("-");
-      chain.move_velocity(-600);
-      delay(200);
-    }
-
-    // if (competition::get_status() != competition_status::COMPETITION_AUTONOMOUS)
-    // {
-    //   break;
-    // }
-
-    if (!unjammer_mutex.take(0))
-    {
-      pros::Task::current().remove();
-      break;
-    }
+    print_to_controller(line1, line2, line3);
   }
 }
 
+/*
+ *     _         _
+ *    / \  _   _| |_ ___  _ __
+ *   / _ \| | | | __/ _ \| '_ \
+ *  / ___ \ |_| | || (_) | | | |
+ * /_/__ \_\__,_|\__\___/|_| |_|
+ * |  _ \ ___  _   _| |_(_)_ __   ___  ___
+ * | |_) / _ \| | | | __| | '_ \ / _ \/ __|
+ * |  _ < (_) | |_| | |_| | | | |  __/\__ \
+ * |_| \_\___/ \__,_|\__|_|_| |_|\___||___/
+ */
+
+/**
+ * a shorthand for `chassis.waitUntilDone()`
+ */
 void wait()
 {
   chassis.waitUntilDone();
 }
 
-//! ---------------------------------------
-//! BASIC AUTONOMOUS ROUTINE
-//! ---------------------------------------
-void basicAutonRoutine(FieldSide side) {
-  int r = side == RED_POSITIVE || side == BLUE_NEGATIVE ? 1 : -1;
+//* Simple autons
+void auton_drive_forward()
+{
+  chassis.tank(30, 30);
+  delay(800);
+  chassis.tank(0, 0);
+}
 
-  chassis.setPose({r * 24, 7.5+0, 0}, false);
+void auton_basic(FieldSide side)
+{
+  int r = left_or_right(side) == RIGHT ? 1 : -1;
+
+  chassis.setPose({r * 24, 7.5 + 0, 0}, false);
 
   roller.move(127);
   hook.set_value(true);
@@ -836,9 +751,9 @@ void basicAutonRoutine(FieldSide side) {
   hook.set_value(false);
   delay(400);
 
-  chassis.turnToPoint(r * 0, 48 + 1, 1000, {.forwards = false});
+  chassis.turnToPoint(r * 0, 48, 1000, {.forwards = false});
   wait();
-  chassis.moveToPoint(r * (24 + 0), 48 + 1, 2000, {.forwards = false, .maxSpeed = 45});
+  chassis.moveToPoint(r * (24 + 0), 48, 2000, {.forwards = false, .maxSpeed = 45});
   wait();
 
   //* grab goal
@@ -847,26 +762,47 @@ void basicAutonRoutine(FieldSide side) {
   intake_direction = 1;
 
   delay(2000);
-  
-  chassis.turnToPoint(r*-100, 48, 1000);
-  chassis.moveToPoint(r*11, 48, 1500, {.maxSpeed = 60});
+
+  chassis.turnToPoint(r * -100, 48, 1000);
+  chassis.moveToPoint(r * 11, 48, 1500, {.maxSpeed = 60});
   chassis.waitUntilDone();
-  
+
   roller.brake();
   intake_direction = 0;
 }
 
-//! ---------------------------------------
-//! CLOSE AUTONOMOUS ROUTINE
-//! ---------------------------------------
-/**
- * starts LEFT side by default
- */
-void negativeAutonRoutine(bool mirror = false)
+ASSET(path_rpa1_txt);
+ASSET(path_rpa2_txt);
+//* Advanced autons
+void auton_positive_aggressive(FieldSide side)
+{
+  // int r = left_or_right(side) == RIGHT ? 1 : -1;
+
+  chassis.setPose({-63, -24, 90}, false);
+
+  roller.move(127);
+
+  chassis.follow(path_rpa1_txt, 15, 4000);
+  chassis.follow(path_rpa2_txt, 4, 2000, false);
+  wait();
+
+  lever.set_value(true);
+  intake_direction = 1;
+}
+
+void auton_positive_defensive(FieldSide side)
+{
+}
+
+void auton_negative_aggressive(FieldSide side)
+{
+}
+
+void auton_negative_defensive(FieldSide side, bool mirror = false)
 {
   int r = mirror ? -1 : 1;
 
-  chassis.setPose({r * 24, 7.5+2, 0}, false);
+  chassis.setPose({r * 24, 7.5 + 2, 0}, false);
 
   roller.move(127);
   hook.set_value(true);
@@ -930,373 +866,271 @@ void negativeAutonRoutine(bool mirror = false)
   }
 }
 
-//! ---------------------------------------
-//! FAR AUTONOMOUS ROUTINE
-//! ---------------------------------------
-/**
- * starts LEFT side by default
+//* Auton skills
+void auton_skills()
+{
+  chassis.setBrakeMode(MOTOR_BRAKE_BRAKE);
+
+  chassis.setPose({0, 24 - 8 + 0.5, 180}, false);
+
+  ring_color_to_eject = ALLIANCE_NEITHER;
+  /*
+  while (true) {
+    delay(51);
+    // print in one print statement the x and y pos and rotation of the robot
+    master.print(0, 0, to_string(chassis.getPose().x).c_str());
+    delay(51);
+    master.print(1, 0, to_string(chassis.getPose().y).c_str());
+    delay(51);
+    master.print(2, 0, to_string(chassis.getPose().theta).c_str());
+  }
+  */
+
+  // alliance stake
+  chassis.moveToPoint(0, 24 - 8 - 7, 1000);
+  wait();
+
+  ladybrown_motor.move_absolute(-320, 200);
+  delay(500);
+
+  // back up
+  chassis.moveToPoint(0, 24, 1000, {.forwards = false});
+  wait();
+
+  ladybrown_motor.move_absolute(-10, 200);
+  ladybrown_motor.set_brake_mode(MOTOR_BRAKE_COAST);
+
+  int d = 1;
+
+  while (true)
+  {
+
+    // turn to first goal
+    chassis.turnToHeading(270, 1200);
+    chassis.moveToPoint(d*(24 + 3), 24 - 1, 3000, {.forwards = false, .maxSpeed = 80});
+    // chassis.moveToPose(24, 24, 270, 2000, {.forwards = false, .maxSpeed = 127});
+    wait();
+
+    // delay(150);
+    lever.set_value(true);
+    delay(350);
+
+    intake_direction = 1;
+    roller.move(127);
+
+    // first two rings in a row
+    chassis.turnToHeading(90, 1000);
+    chassis.moveToPoint(d*(48 + 8), 24, 2000, {.maxSpeed = 80});
+    chassis.moveToPoint(d*48, 24 + 8, 800, {.forwards = false});
+    // side ring
+    chassis.turnToPoint(d*48, 12, 2000, {.maxSpeed = 60, .minSpeed = 20, .earlyExitRange = 5});
+    chassis.moveToPoint(d*46, 18, 800);
+    wait();
+    delay(200);
+    chassis.turnToPoint(d*24, 48, 800);
+    chassis.moveToPoint(d*24, 48, 1500);
+    chassis.turnToPoint(d*48, 48, 1500, {.maxSpeed = 60});
+    chassis.moveToPoint(d*48, 48, 1000);
+
+    // to the wall stake
+    chassis.turnToPoint(d*48 - 7, 72, 1000);
+    chassis.moveToPoint(d*48 - 9, 72-2, 2000, {.maxSpeed = 70});
+    wait();
+    chassis.turnToPoint(d*72, 72-2, 1000);
+
+    ladybrown_motor.set_brake_mode(MOTOR_BRAKE_HOLD);
+    ladybrown_motor.move_absolute(lb_pos_prime + ladybrown_offset, 200);
+
+    chassis.moveToPoint(d*(72 - 10.5 - 4.5), 72-2, 1200, {.maxSpeed = 50});
+    chassis.turnToHeading(90, 1000);
+    wait();
+    delay(800);
+
+    // 1st tall wall stake ring
+    ladybrown_motor.move_absolute(lb_pos_extend + ladybrown_offset, 200);
+    delay(1000);
+    chassis.turnToHeading(90+30, 800);
+    chassis.turnToHeading(90-30, 1200);
+    chassis.turnToHeading(90, 800);
+    chassis.moveToPoint(72, 72, 400);
+    wait();
+
+    chassis.moveToPoint(d*(48 - 7), 72, 1000, {.forwards = false});
+    ladybrown_motor.move_absolute(lb_pos_stow + ladybrown_offset, 200);
+    wait();
+
+    chassis.turnToPoint(d*48, 72 + 24, 1000);
+    chassis.moveToPoint(d*48, 72 + 24, 1500, {.maxSpeed = 80});
+    chassis.turnToPoint(d*24, 72 + 24, 1000, {.maxSpeed = 60});
+    wait();
+    delay(500); // let the ring get on the goal
+
+    chassis.moveToPoint(d*24, 72 + 24, 1000);
+    wait();
+    chassis.turnToPoint(d*(48 - 7), 72, 1200); // let it be async
+    ladybrown_motor.move_absolute(lb_pos_prime + ladybrown_offset, 200);
+    chassis.moveToPoint(d*(48 - 7), 72, 1500, {.forwards = false, .maxSpeed = 70});
+
+    delay(1000);
+
+    chassis.turnToPoint(d*72, 72, 1000);
+    chassis.moveToPoint(d*(72 - 10.5 - 3), 72, 1000, {.maxSpeed = 40});
+    chassis.turnToHeading(90, 1000);
+    wait();
+
+    ladybrown_motor.move_absolute(lb_pos_extend + ladybrown_offset, 200);
+    delay(1000);
+    chassis.turnToHeading(90+30, 800);
+    chassis.turnToHeading(90-30, 1200);
+    chassis.turnToHeading(90, 800);
+    chassis.moveToPoint(72, 72, 400);
+    wait();
+
+    chassis.moveToPoint(d*(48 - 7), 72, 1000, {.forwards = false});
+    wait();
+    ladybrown_motor.move_absolute(lb_pos_stow + ladybrown_offset, 200);
+
+    // put the goal in the corner lil bro
+    chassis.moveToPoint(d*60, 18, 2000, {.forwards = false});
+    wait();
+
+    lever.set_value(false);
+
+    break;
+    if (d == 1)
+    {
+      d = -1;
+      continue;
+    }
+    else
+      break;
+  }
+}
+
+/*
+ *  _     _  __                      _
+ * | |   (_)/ _| ___  ___ _   _  ___| | ___
+ * | |   | | |_ / _ \/ __| | | |/ __| |/ _ \
+ * | |___| |  _|  __/ (__| |_| | (__| |  __/
+ * |_____|_|_|  \___|\___|\__, |\___|_|\___|
+ *  _____                 |___/
+ * |  ___|   _ _ __   ___| |_(_) ___  _ __  ___
+ * | |_ | | | | '_ \ / __| __| |/ _ \| '_ \/ __|
+ * |  _|| |_| | | | | (__| |_| | (_) | | | \__ \
+ * |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
  */
-void farAutonRoutine(bool mirror = false)
+void initialize()
 {
-  int r = mirror ? -1 : 1;
+  left_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
+  right_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
+
+  chassis.calibrate();
+
+  master.clear();
+
+  double lb_sensor_pos = ladybrown_sensor.get_position() / 100.0;
+
+  delay(80);
+  // print the angle
+  master.print(0, 0, "Angle: ");
+  delay(80);
+  master.print(1, 0, to_string(lb_sensor_pos).c_str());
+  ladybrown_state = lb_sensor_pos > 10 ? 1 : 0;
+  ladybrown_offset = ladybrown_state == 1 ? lb_sensor_pos * 5 : 0;
+
+  delay(50);
+  // master.print(0, 0, "Calibrating...");
+  // partner.print(0, 0, "Calibrating...");
+
+  // calibration
+
+  // controller task
+  // Task controller_task(controllerAutonSelector);
+
+  ring_detector.set_led_pwm(100);
+  ring_detector.disable_gesture();
+
+  // brain screen task
+  Task brain_task(brain_screen);
 }
 
+void disabled() {}
 
-//! ---------------------------------------
-//! SKILLS AUTONOMOUS
-//! ---------------------------------------
-void autonSkills()
-{
-  chassis.setPose({18 + 1, 15 + 3, 210});
-
-  chassis.moveToPoint(24, 24, 1000, {.forwards = false, .maxSpeed = 50});
-  chassis.waitUntilDone();
-
-  delay(300);
-  lever.set_value(true);
-
-  unjammer.remove();
-  unjammer = Task(autonIntakeUnjammer);
-
-  roller.move(127);
-  delay(300);
-
-  // testing coords
-  // chassis.turnToPoint(0, 24, 1000);
-  // chassis.moveToPoint(0, 24, 1000);
-  // return;
-
-  // close to ladder ring
-  chassis.turnToPoint(24, 48, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-  chassis.moveToPoint(24, 48, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-
-  chassis.turnToPoint(48, 48, 1000);
-  chassis.waitUntilDone();
-  delay(500);
-  chassis.moveToPoint(48, 48, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-
-  // right side of the ring triangle
-  chassis.turnToPoint(48, 24 - 24, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-  chassis.moveToPoint(48, 24, 2000);
-  chassis.waitUntilDone();
-  delay(1000);
-
-  chassis.turnToPoint(60, 28, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-  chassis.moveToPoint(60 - 4, 24, 2000);
-  chassis.waitUntilDone();
-  delay(1500);
-
-  // go drop the thing in the corner
-  chassis.moveToPoint(30, 30, 2000, {.maxSpeed = 40});
-  chassis.moveToPoint(60 - 5, 12 + 5, 2000, {.forwards = false});
-  chassis.waitUntilDone();
-
-  delay(1000);
-
-  unjammer.suspend();
-  chain.brake();
-  delay(200);
-  lever.set_value(false);
-  delay(100);
-
-  // ! WAAAA
-  // return;
-
-  chassis.moveToPoint(0, 24, 2000);
-  chassis.turnToPoint(-24, 24, 2000, {.forwards = false});
-  chassis.moveToPoint(-24, 24, 2000, {.forwards = false, .maxSpeed = 60});
-  chassis.waitUntilDone();
-
-  // second goal
-  delay(300);
-  lever.set_value(true);
-  delay(300);
-  unjammer.resume();
-
-  // ! MIRROR POINT START
-
-  // close to ladder ring
-  chassis.turnToPoint(-24, 48, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-  chassis.moveToPoint(-24, 48, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-
-  // ! extra piece
-
-  // ! end extra piece
-
-  chassis.turnToPoint(-48, 48, 1000);
-  chassis.waitUntilDone();
-  delay(500);
-  chassis.moveToPoint(-48, 48, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-
-  // right side of the ring triangle
-  chassis.turnToPoint(-48, 24 - 24, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-  chassis.moveToPoint(-48, 24 - 6, 2000);
-  chassis.waitUntilDone();
-  delay(1000);
-
-  chassis.turnToPoint(-60, 24, 2000);
-  chassis.waitUntilDone();
-  delay(500);
-  chassis.moveToPoint(-60 + 4, 24, 2000);
-  chassis.waitUntilDone();
-  delay(1500);
-
-  // go drop the thing in the corner
-  chassis.moveToPoint(-30, 30, 2000);
-  chassis.moveToPoint(-60 - 5, 12 - 5, 2000, {.forwards = false});
-  chassis.waitUntilDone();
-
-  delay(1000);
-
-  unjammer.suspend();
-  chain.brake();
-  delay(200);
-  lever.set_value(false);
-  delay(100);
-
-  // ! MIRROR POINT END
-
-  // chassis.moveToPoint(-38, 36, 1000);
-  // chassis.turnToPoint(0 - 3, 72 + 48, 2000, {.forwards = false});
-  // chassis.moveToPoint(0 - 3, 72 + 48, 2000, {.forwards = false});
-  // chassis.waitUntilDone();
-  chassis.moveToPoint(-48, 72, 3000);
-
-  chassis.moveToPoint(0, 72 + 60, 3000);
-  chassis.turnToPoint(-24, 72 + 60, 2000, {.forwards = false});
-  chassis.moveToPoint(-24, 72 + 60, 2000, {.forwards = false, .maxSpeed = 40});
-
-  chassis.waitUntilDone();
-
-  delay(200);
-  lever.set_value(true);
-  delay(200);
-
-  chassis.turnToPoint(-72, 72 + 72, 1000);
-
-  chassis.turnToPoint(-72, 72 + 72, 2000, {.forwards = false});
-  chassis.moveToPoint(-72 + 5, 72 + 72 - 5, 4000, {.forwards = false});
-  chassis.waitUntilDone();
-  delay(200);
-
-  lever.set_value(false);
-
-  // chassis.moveToPoint(-48, 72 + 24, 2000);
-  // chassis.waitUntilDone();
-  // chassis.turnToPoint(-24, 72 + 48, 2000);
-  // chassis.moveToPoint(-24, 72 + 44, 2000);
-  // chassis.waitUntilDone();
-  // chassis.turnToPoint(0, 0, 2000);
-  // chassis.turnToPoint(0 + 24, 72 + 48, 2000, {.forwards = false});
-  // chassis.moveToPoint(0 - 3, 72 + 48, 2000, {.forwards = false});
-  // chassis.waitUntilDone();
-
-  // delay(200);
-  // lever.set_value(true);
-  // delay(200);
-  // unjammer.resume();
-
-  // chassis.turnToPoint(24, 72 + 24, 2000);
-  // chassis.moveToPoint(24, 72 + 24, 2000);
-  // chassis.waitUntilDone();
-  // delay(1000);
-
-  // unjammer.suspend();
-  // chain.brake();
-
-  // chassis.turnToPoint(0, 72, 2000);
-  // chassis.waitUntilDone();
-  // chassis.moveToPoint(0, 72, 2000);
-  // chassis.waitUntilDone();
-  // chassis.turnToPoint(-24, 72 + 24, 2000);
-  // chassis.waitUntilDone();
-  // chassis.moveToPoint(-24 - 4, 72 + 24 + 4, 2000);
-  // chassis.waitUntilDone();
-
-  // unjammer.resume();
-  // delay(1000);
-
-  // unjammer.remove();
-  unjammer.remove();
-}
-
-//! ---------------------------------------
-//! DRIVE FORWARD AUTONOMOUS
-//! ---------------------------------------
-void autonDriveForward()
-{
-  chassis.tank(30, 30);
-  delay(800);
-  chassis.tank(0, 0);
-}
+void competition_initialize() {}
 
 void autonomous()
 {
-  // chassis.calibrate();
+  // chassis is already calibrated in initialize()
+
   left_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
   right_motors.set_brake_mode(MOTOR_BRAKE_BRAKE);
   auton_selector_active = false;
-  // autonDriveForward();
 
-  // RIGHT I THINK
-  // closeAutonRoutine(false);
-  // LEFT I THINK 
-  negativeAutonRoutine(true);
+  //! HARDCODER
+  // selected_auton =
+  // selected_auton = AUTON_BASIC;
+  selected_auton = AUTON_AGGRESSIVE;
+  // selected_auton = AUTON_DEFENSIVE;
 
-  // eject_color = BLUE_RING;
-  eject_color = RED_RING;
-  // basicAutonRoutine(RIGHT_SIDE);
-  return;
-  chosen_auton = AUTON_BASIC;
-  
-  
-}
+  selected_field_side = RED_POSITIVE;
+  // selected_field_side = RED_NEGATIVE;
+  // selected_field_side = BLUE_POSITIVE;
+  // selected_field_side = BLUE_NEGATIVE;
 
-void driverIntakeUnjammer()
-{
-  return;
-  while (unjammer_mutex.take(0))
+  // selected_auton = AUTON_SKILLS;
+
+  // ring_color_to_eject = invert_red_blue(red_or_blue(selected_field_side));
+  ring_color_to_eject = ALLIANCE_NEITHER;
+
+  switch (selected_auton)
   {
-    delay(50);
-  }
+  //* symmetrical autons
+  case AUTON_NONE:
+    break;
 
-  double prev_position = chain.get_position();
-  int direction = 0;
-  int ticker = 0;
-  int eject_ticker = 0;
-  while (true)
-  {
-    // //* EJECTION CODE
-    // double chain_diff = abs(chain.get_position() - previous_ejection_motor_pos) / 360.0;
-    // // master.print(0, 0, to_string(chain_diff).c_str());
-    // if (previous_ejection_motor_pos == 0) chain_diff = 1000000;
-    // if (chain_diff > 1.0 && chain_diff < 2.0)
-    //   disable_gap_filler = false;
-    // double chain_diff_mod = fmod(chain_diff, 4.0);
-    // bool gap_filler = (chain_diff_mod >= 0.9 || chain_diff_mod <= 0.1) && !disable_gap_filler;
+  case AUTON_FORWARD:
+    auton_drive_forward();
+    break;
 
-    // if (gap_filler || (chain_detector.get_distance() < 40)) {
-    //   master.rumble(".");
-    //   disable_gap_filler = true;
-    // }
-    // if (gap_filler) master.rumble(".");
-    // if (chain_detector.get_distance() < 40) master.rumble("-");
+  //* asymmetrical autons
+  case AUTON_BASIC:
+    auton_basic(selected_field_side);
+    break;
 
-    bool distance_triggered = chain_detector.get_distance() < 40;
-    bool color_matched = last_detected_ring_color == eject_color;
-    bool eject_ticker_ok = eject_ticker > 4;
-
-    //* GAP FILLING
-    double chain_diff = abs(previous_ejection_motor_pos - chain.get_position());
-    bool gap_filler = false;
-
-    if (chain_diff / 360.0 >= 4.0)
-    {
-      gap_filler = true;
-    }
-
-    if ((distance_triggered || gap_filler) && eject_ticker_ok)
-    {
-      previous_ejection_motor_pos = chain.get_position();
-      // master.rumble(".");
-    }
-
-    bool eject = 
-                 eject_ticker_ok &&
-                 (distance_triggered || gap_filler) &&
-                 color_matched &&
-                 eject_color != NO_COLOR;
-
-    if (eject)
-      eject_ticker = 0;
-    else if (eject_ticker < 10)
-      eject_ticker++;
-
-    // bool eject = eject_toggle &&
-    //  (chain_detector.get_distance() < 40 || gap_filler) &&
-    //  last_detected_ring_color == eject_color &&
-    //  eject_color != NO_COLOR;
-
-    // if (chain_detector.get_distance() < 50)
-    //   master.rumble("..");
-
-    //* some normal anti jam stuff
-    prev_position = chain.get_position();
-
-    if (
-        master.get_digital_new_press(DIGITAL_R1) ||
-        master.get_digital_new_press(DIGITAL_R2) ||
-        eject)
-      ticker = 0;
-    if (master.get_digital(DIGITAL_R1))
-    {
-      if (ladybrown_state == 1)
-      {
-        chain.move_velocity(400);
-      }
-      else
-      {
-        chain.move_velocity(600);
-      }
-      direction = 1;
-    }
-    else if (master.get_digital(DIGITAL_R2))
-    {
-      chain.move_velocity(-600);
-      direction = -1;
-    }
+  case AUTON_AGGRESSIVE:
+    if (positive_or_negative(selected_field_side) == POSITIVE)
+      auton_positive_aggressive(selected_field_side);
     else
-    {
-      chain.brake();
-      direction = 0;
-    }
+      auton_negative_aggressive(selected_field_side);
+    break;
 
-    if (eject)
-    {
-      // disable_gap_filler = true;
-      chain.set_brake_mode(MOTOR_BRAKE_BRAKE);
-      chain.brake();
-      master.rumble(".");
-      delay(100);
-      chain.set_brake_mode(MOTOR_BRAKE_COAST);
-    }
+  case AUTON_DEFENSIVE:
+    if (positive_or_negative(selected_field_side) == POSITIVE)
+      auton_positive_defensive(selected_field_side);
+    else
+      auton_negative_defensive(selected_field_side);
+    break;
 
-    if (ticker < 40)
-      ticker++;
+  //* skills
+  case AUTON_SKILLS:
+    ring_color_to_eject = ALLIANCE_BLUE;
+    auton_skills();
+    break;
 
-    delay(10);
-
-    //* JAM CONDITION
-    if ((abs(prev_position - chain.get_position()) < 1) && ticker >= 15)
-    {
-      if (direction != 0)
-        master.rumble("-");
-      chain.move_velocity(-direction * 600);
-      delay(300);
-    }
-
-    // if (competition::get_status() != competition_status::COMPETITION_AUTONOMOUS)
-    // break;
+  default:
+    break;
   }
+
+  return;
 }
+
+/*
+ *  ____       _                           _
+ * |  _ \ _ __(_)_   _____    ___ ___   __| | ___
+ * | | | | '__| \ \ / / _ \  / __/ _ \ / _` |/ _ \
+ * | |_| | |  | |\ V /  __/ | (_| (_) | (_| |  __/
+ * |____/|_|  |_| \_/ \___|  \___\___/ \__,_|\___|
+ */
 
 void opcontrol()
 {
@@ -1305,36 +1139,26 @@ void opcontrol()
 
   auton_selector_active = false;
 
-  // eject_toggle = true;
-
   left_motors.set_brake_mode(MOTOR_BRAKE_COAST);
   right_motors.set_brake_mode(MOTOR_BRAKE_COAST);
 
   int turning_speed = 60;
 
-  // int chain_speed = 500;
-
-  // bool lever_state = false;
-  // bool hook_state = false;
-
-  // Task unjammer = Task(driverIntakeUnjammer);
-
   bool ladybrown_oncer = false;
-  int ladybrown_ticker = 0;
+  int ladybrown_haptic_ticker = 0;
 
-  // set color based on which auton is selected
-  if (chosen_auton == RED_LEFT || chosen_auton == RED_RIGHT)
+  if (red_or_blue(selected_field_side) == ALLIANCE_RED)
   {
-    eject_color = RED_RING;
+    ring_color_to_eject = ALLIANCE_BLUE;
   }
-  else if (chosen_auton == BLUE_LEFT || chosen_auton == BLUE_RIGHT)
+  else if (red_or_blue(selected_field_side) == ALLIANCE_BLUE)
   {
-    eject_color = BLUE_RING;
+    ring_color_to_eject = ALLIANCE_RED;
   }
 
-  ring_detector.set_led_pwm(50);
+  ring_detector.set_led_pwm(100);
 
-  ulong tick = 0;
+  int tick = 0;
 
   while (true)
   {
@@ -1345,126 +1169,106 @@ void opcontrol()
       continue; // DISABLE THE DRIVE LOOP SO I DONT ACCIDENTALLY DRIVE IT OFF
                 // THE TABLE
 
-    detectRingColor();
+    detect_ring_color();
 
-    // clamp
+    //* clamp
     if (master.get_digital(DIGITAL_L1))
       lever.set_value(true);
     else if (master.get_digital(DIGITAL_L2))
       lever.set_value(false);
 
-    // face buttons are used for auton selection
-    if (!auton_selector_active)
+    //* arm
+    if (master.get_digital(DIGITAL_UP))
+      hook.set_value(false);
+    else if (master.get_digital(DIGITAL_DOWN))
+      hook.set_value(true);
+
+    //* set eject color
+    if (master.get_digital_new_press(DIGITAL_LEFT))
     {
-      // arm
-      if (master.get_digital(DIGITAL_UP))
-        hook.set_value(false);
-      else if (master.get_digital(DIGITAL_DOWN))
-        hook.set_value(true);
-
-      //* ladybrown
-      // left/right stows it, b readies it, y and a extend it halfway, and x goes all the way
-      // if (master.get_digital(DIGITAL_LEFT) ||
-      // master.get_digital(DIGITAL_RIGHT))
-      // ladybrown_state = 3;
-      // else
-      if (master.get_digital(DIGITAL_B))
-        ladybrown_state = 0;
-      else if (master.get_digital(DIGITAL_Y) ||
-               master.get_digital(DIGITAL_A))
-        ladybrown_state = 1;
-      else if (master.get_digital(DIGITAL_X))
-        ladybrown_state = 2;
-
-      //* set eject color based on button left
-      if (master.get_digital_new_press(DIGITAL_LEFT))
+      if (ring_color_to_eject == ALLIANCE_RED)
       {
-        if (eject_color == RED_RING)
-        {
 
-          master.print(1, 0, "EJECT BLUE");
-          eject_color = BLUE_RING;
-        }
-        else if (eject_color == BLUE_RING)
-        {
-
-          master.print(1, 0, "EJECT RED");
-          eject_color = RED_RING;
-        }
-        else
-        {
-          master.print(1, 0, "EJECT RED");
-          eject_color = RED_RING;
-        }
+        master.print(1, 0, "EJECT BLUE");
+        ring_color_to_eject = ALLIANCE_BLUE;
       }
-      if (master.get_digital_new_press(DIGITAL_RIGHT))
+      else if (ring_color_to_eject == ALLIANCE_BLUE)
       {
-        eject_color == NO_COLOR;
+
+        master.print(1, 0, "EJECT RED");
+        ring_color_to_eject = ALLIANCE_RED;
+      }
+      else
+      {
+        master.print(1, 0, "EJECT RED");
+        ring_color_to_eject = ALLIANCE_RED;
       }
     }
+    if (master.get_digital_new_press(DIGITAL_RIGHT))
+    {
+      master.print(1, 0, "NO EJECT");
+      ring_color_to_eject = ALLIANCE_NEITHER;
+    }
+
+    //* ladybrown
+    if (master.get_digital(DIGITAL_B))
+      ladybrown_state = 0;
+    else if (master.get_digital(DIGITAL_Y) ||
+             master.get_digital(DIGITAL_A))
+      ladybrown_state = 1;
+    else if (master.get_digital(DIGITAL_X))
+      ladybrown_state = 2;
 
     //* ladybrown stuff
-    ladybrown_ticker++;
-    if (ladybrown_ticker > 50 && ladybrown_state == 1)
+    ladybrown_haptic_ticker++;
+    if (ladybrown_haptic_ticker > 50 && ladybrown_state == 1)
     {
       master.rumble(".");
-      ladybrown_ticker = 0;
+      ladybrown_haptic_ticker = 0;
     }
 
     if (ladybrown_state == 0)
     {
-      // if (ladybrown_sensor.get_position() > 0)
-      // ladybrown.move(ladybrown_pid.update(-100, lb_pos));
       ladybrown_motor.set_brake_mode(MOTOR_BRAKE_COAST);
       if (!ladybrown_oncer)
-        ladybrown_motor.move_absolute(-5 + lb_offset, 200);
+        ladybrown_motor.move_absolute(lb_pos_stow + ladybrown_offset, 200);
       ladybrown_oncer = true;
     }
     else
+    {
       ladybrown_oncer = false;
+      ladybrown_motor.set_brake_mode(MOTOR_BRAKE_HOLD);
+    }
     if (ladybrown_state == 1)
-    {
-      // ladybrown.move(ladybrown_pid.update(-95, lb_pos));
-      ladybrown_motor.set_brake_mode(MOTOR_BRAKE_HOLD);
-      ladybrown_motor.move_absolute(-95 + lb_offset, 200);
-    }
+      ladybrown_motor.move_absolute(lb_pos_prime + ladybrown_offset, 200);
     else if (ladybrown_state == 2)
-    {
-      // ladybrown.move(ladybrown_pid.update(0, lb_pos));
-      ladybrown_motor.set_brake_mode(MOTOR_BRAKE_HOLD);
-      ladybrown_motor.move_absolute(-650 + lb_offset, 100);
-    }
-    else if (ladybrown_state == 3)
-    {
-      // ladybrown.move(ladybrown_pid.update(70, lb_pos));
-      ladybrown_motor.set_brake_mode(MOTOR_BRAKE_HOLD);
-      ladybrown_motor.move_absolute(-0 + lb_offset, 200);
-    }
+      ladybrown_motor.move_absolute(lb_pos_extend + ladybrown_offset, 100);
 
+    //* intake
     if (master.get_digital(DIGITAL_R1))
     {
-      // chain.move_velocity(chain_speed);
-      if (master.get_digital(DIGITAL_R2)) {
+      if (master.get_digital(DIGITAL_R2))
+      {
         intake_direction = 2;
-      } else {
+      }
+      else
+      {
         intake_direction = 1;
       }
       roller.move(127);
     }
     else if (master.get_digital(DIGITAL_R2))
     {
-      // chain.move_velocity(-chain_speed);
       roller.move(-127);
       intake_direction = -1;
     }
     else
     {
-      // chain.move(0);
       roller.move(0);
       intake_direction = 0;
     }
 
-    //* DRIVE CODE
+    //* drive code
     double forward = master.get_analog(ANALOG_LEFT_Y),
            turn = master.get_analog(ANALOG_RIGHT_X) *
                   (0.01 * turning_speed);
@@ -1474,85 +1278,7 @@ void opcontrol()
     left /= max_val;
     right /= max_val;
 
-    // if (!master.get_digital(E_CONTROLLER_DIGITAL_R1))
-    // {
-
-    // continue;
-
     left_motors.move(left * 127);
     right_motors.move(right * 127);
-    // }
-    // else
-    // {
-    // chassis.curvature(forward, turn);
-    // }
   }
 }
-
-/*
-  rollers.set_value(true);
-  chassis.setPose({31, 9, 0}, false);
-
-  chassis.moveToPoint(48, 48, 1000);
-  // chassis.waitUntil(36);
-  chassis.waitUntilDone();
-  intake.move_velocity(200);
-  delay(300);
-  // delay(350);
-
-  // move to first goal
-  chassis.turnToPoint(0, 48, 500, {.forwards = false}, true);
-  delay(100);
-  intake.brake();
-  chassis.waitUntilDone();
-  chassis.moveToPoint(24, 48 + 2, 1000, {.forwards = false, .maxSpeed = 50});
-  chassis.waitUntilDone();
-  delay(150);
-  lever.set_value(true);
-  intake.move_velocity(200);
-  delay(600);
-  intake.move_velocity(-100);
-  delay(300);
-  chassis.turnToPoint(0, 0, 1000);
-  chassis.waitUntilDone();
-
-  intake.move_velocity(200);
-  chassis.moveToPoint(0, 33, 1500);
-  chassis.waitUntilDone();
-
-  intake.move_velocity(200);
-  // intake.brake();
-  chassis.moveToPoint(-32, 32, 1000);
-  chassis.waitUntilDone();
-
-  lever.set_value(false);
-  intake.move_velocity(200);
-  chassis.turnToPoint(-48, 48, 1000);
-  chassis.moveToPoint(-48, 48, 1000, {}, true);
-  // chassis.moveToPose(-48, 48, 315, 1500);
-  delay(900);
-  intake.brake();
-  chassis.turnToPoint(-24, 48, 1000, {.forwards = false});
-  delay(100);
-  chassis.moveToPoint(-18, 48, 1000, {.forwards = false, .maxSpeed = 50});
-  chassis.waitUntilDone();
-  lever.set_value(true);
-  intake.move_velocity(200);
-  delay(500);
-  chassis.turnToPoint(0, 48, 1000);
-
-  chassis.waitUntilDone();
-  delay(300);
-
-  left_motors.set_brake_mode(MOTOR_BRAKE_COAST);
-  right_motors.set_brake_mode(MOTOR_BRAKE_COAST);
-
-  intake.move(40);
-  chassis.moveToPoint(-6, 52, 800);
-  chassis.waitUntilDone();
-
-  lever.set_value(false);
-
-  delay(3000);
-  intake.brake();
-  */
