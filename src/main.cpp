@@ -1089,8 +1089,26 @@ void controller_screen()
     // broken chain
     if (
       (abs(chain.get_target_velocity()) > 5) &&
-      chain.get_efficiency() > 70
+      chain.get_efficiency() > 80
     ) errors += "CHAIN_SNAP";
+
+    // no sensors exist yet to detect a bad clamp
+
+    // cycle through errors
+    // untested copilot code below
+    if (errors.length() > 0)
+    {
+      error_cycle_ticker++;
+      int offset = error_cycle_ticker % (errors.length() - 10);
+      errors = errors.substr(offset, 10);
+    }
+    else
+      error_cycle_ticker = 0;
+
+    line3.replace(6, 10, errors);
+
+    // now need to add haptic feedback
+    // remember to do delay(51) after each controller command
 
 
     print_to_controller(line1, line2, line3);
